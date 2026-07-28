@@ -105,8 +105,10 @@ Add an exercise by appending to `EXERCISES` in `exercises.js`:
 To change volume globally, edit `SCHEMES` and `REST` at the bottom of the same
 file. To change the rotation, edit `FOCI` and `FOCUS_ORDER`.
 
-**After changing any file, bump `CACHE` in `sw.js`** (`daily-workout-v1` →
-`v2`). Otherwise installed phones keep serving the cached old version.
+The service worker is **network-first with a 2.5s timeout**, so a deploy shows
+up on the next load whenever you have signal, and falls back to the cache when
+you don't. Bump `CACHE` in `sw.js` when you add or rename a file in `ASSETS`,
+so the precache list stays honest.
 
 ## Running locally
 

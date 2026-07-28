@@ -1,5 +1,17 @@
-/* Cache-first service worker. Bump CACHE when you change any asset. */
-const CACHE = 'daily-workout-v2';
+/* Network-first with a short timeout, falling back to cache.
+
+   The obvious choice for an offline app is cache-first, but that makes a
+   deploy take two page loads to appear: the first load is served from the old
+   cache while the new worker installs. Network-first fixes that — you always
+   get the current build when you have signal — and the timeout means a flaky
+   gym connection still falls back to cache quickly instead of hanging.
+
+   The whole app is ~50 KB, so the network round trip costs very little.
+
+   Bump CACHE when the asset list below changes. */
+const CACHE = 'daily-workout-v3';
+const NET_TIMEOUT = 2500;
+
 const ASSETS = [
   './',
   './index.html',
@@ -28,18 +40,30 @@ self.addEventListener('activate', e => {
   );
 });
 
+function fromNetwork(request) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timeout')), NET_TIMEOUT);
+    fetch(request).then(
+      response => {
+        clearTimeout(timer);
+        if (response && response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE).then(c => c.put(request, copy)).catch(() => {});
+        }
+        resolve(response);
+      },
+      err => { clearTimeout(timer); reject(err); }
+    );
+  });
+}
+
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  if (new URL(e.request.url).origin !== self.location.origin) return;
+
   e.respondWith(
-    caches.match(e.request).then(hit => {
-      if (hit) {
-        // refresh the cache in the background, but serve instantly
-        fetch(e.request)
-          .then(res => { if (res.ok) caches.open(CACHE).then(c => c.put(e.request, res)); })
-          .catch(() => {});
-        return hit;
-      }
-      return fetch(e.request).catch(() => caches.match('./index.html'));
-    })
+    fromNetwork(e.request).catch(() =>
+      caches.match(e.request).then(hit => hit || caches.match('./index.html'))
+    )
   );
 });
