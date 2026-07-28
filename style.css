@@ -147,6 +147,27 @@ li.done .tick, .set.done { border-color: var(--good); background: var(--good); c
 }
 .ex-cue { font-size: 13px; color: var(--muted); margin-top: 5px; }
 
+/* last session + progression cue */
+.ex-last {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.ex-last .last-cta {
+  color: var(--accent);
+  font-weight: 700;
+  background: rgba(255,122,47,.12);
+  border-radius: 6px;
+  padding: 2px 7px;
+}
+
 .ex-bottom {
   display: flex;
   align-items: center;
@@ -166,6 +187,10 @@ li.done .tick, .set.done { border-color: var(--good); background: var(--good); c
   font-variant-numeric: tabular-nums;
 }
 .set.done { color: #08110c; font-weight: 700; }
+/* a logged set shows the reps performed instead of its number; hitting the top
+   of the range gets a ring so a good session is readable at a glance */
+.set.has-reps { font-size: 15px; }
+.set.at-top { box-shadow: 0 0 0 2px rgba(53,208,127,.32); }
 
 .weight {
   margin-left: auto;

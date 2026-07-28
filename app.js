@@ -44,10 +44,49 @@ let maxes     = load(KEY.maxes, {});
 
 /* All generation logic lives in engine.js, which knows nothing about the DOM
    or storage. This layer owns state and rendering only. */
-const { dateKey, dayNumber, keyToDate, e1rm, exerciseById } = Engine;
+const { dateKey, dayNumber, keyToDate, e1rm, exerciseById, repRange } = Engine;
 
 function buildPlan(key) {
   return Engine.buildPlan(key, settings, overrides[key]);
+}
+
+/* ======================= performance history ======================= */
+
+/* Most recent session before `beforeKey` in which this movement was performed.
+   Counts a session if EITHER a weight or any reps were logged, so bodyweight
+   work gets a history too. Returns { key, weight, reps } or null. */
+function lastPerformance(exId, beforeKey) {
+  const keys = Object.keys(logs).filter(k => k < beforeKey).sort().reverse();
+  for (const k of keys) {
+    const r = logs[k];
+    if (!r) continue;
+    const weight = r.weights && r.weights[exId];
+    const reps = (r.reps && r.reps[exId]) || [];
+    const hasWeight = weight != null && weight !== '';
+    if (!hasWeight && !reps.length) continue;
+    return { key: k, weight: hasWeight ? weight : null, reps };
+  }
+  return null;
+}
+
+/* What to aim for today, given last time.
+
+   Loaded lifts get a real progression suggestion. Bodyweight movements get
+   their history shown but no suggested load — when you top out the rep range
+   on push-ups the next step is a harder variation, which is a judgement call,
+   not arithmetic. */
+function targetFor(item, beforeKey) {
+  const range = repRange(item.reps);
+  if (!range) return null;
+  const last = lastPerformance(item.ex.id, beforeKey);
+  if (!last) return null;
+
+  if (!item.ex.load || last.weight == null) {
+    if (!last.reps.length) return null;
+    return { last, range, prog: { weight: null, advance: false, reason: 'bodyweight', reps: last.reps } };
+  }
+  const prog = Engine.progression(last, range, Engine.loadStep(settings.units), item.sets);
+  return prog ? { last, range, prog } : null;
 }
 
 /* ======================= day record ======================= */
@@ -55,9 +94,9 @@ function buildPlan(key) {
 function today() { return dateKey(new Date()); }
 
 function record(key) {
-  if (!logs[key]) logs[key] = { sets: {}, warm: {}, weights: {}, complete: false };
+  if (!logs[key]) logs[key] = { sets: {}, warm: {}, weights: {}, reps: {}, complete: false };
   const r = logs[key];
-  r.sets = r.sets || {}; r.warm = r.warm || {}; r.weights = r.weights || {};
+  r.sets = r.sets || {}; r.warm = r.warm || {}; r.weights = r.weights || {}; r.reps = r.reps || {};
   return r;
 }
 function persist() {
@@ -78,6 +117,56 @@ const exById = exerciseById;
 
 let plan = null;
 const $ = id => document.getElementById(id);
+
+/* Tapping a set is the main interaction in the app, so it carries a lot:
+     - an unlogged set logs as done, defaulting to the top of the rep range
+       (so "I hit my target" costs exactly one tap)
+     - tapping an already-logged set counts it DOWN one rep, for the days you
+       came up short
+     - dropping below the bottom of the range un-logs that set and everything
+       after it
+   Timed work has no rep range and just toggles done/undone. */
+function logSet(item, s, doneSets, range, rec, key) {
+  rec.reps = rec.reps || {};
+  const reps = (rec.reps[item.ex.id] || []).slice();
+  const wasDone = s <= doneSets;
+
+  if (!range) {
+    rec.sets[item.index] = wasDone && doneSets === s ? s - 1 : s;
+  } else if (!wasDone) {
+    // default new sets to the top of the range, or to what was logged last time
+    const t = targetFor(item, key);
+    const fallback = (t && t.prog.advance) ? range.hi
+                   : (t && t.prog.reps.length ? Math.max(...t.prog.reps) : range.hi);
+    for (let i = doneSets; i < s; i++) {
+      if (reps[i] == null) reps[i] = Math.min(range.hi, Math.max(range.lo, fallback));
+    }
+    rec.sets[item.index] = s;
+  } else {
+    const next = (reps[s - 1] || range.hi) - 1;
+    if (next < range.lo) {
+      rec.sets[item.index] = s - 1;
+      reps.length = Math.max(0, s - 1);
+    } else {
+      reps[s - 1] = next;
+    }
+  }
+
+  if (range) {
+    reps.length = Math.min(reps.length, rec.sets[item.index] || 0);
+    if (reps.length) rec.reps[item.ex.id] = reps;
+    else delete rec.reps[item.ex.id];
+  }
+
+  const nowDone = rec.sets[item.index] || 0;
+  persist();
+  renderToday();
+
+  // only start a rest timer when a set was newly completed, not on a rep edit
+  if (!wasDone && nowDone === s && s < item.sets) {
+    startRest(item.rest, 'Set ' + (s + 1) + ' of ' + item.sets + ' · ' + item.ex.name);
+  }
+}
 
 function renderToday() {
   const key = today();
@@ -133,30 +222,54 @@ function renderToday() {
       ov.rerolls = ov.rerolls || {};
       ov.rerolls[item.index] = (ov.rerolls[item.index] || 0) + 1;
       delete rec.sets[item.index];
+      if (rec.reps) delete rec.reps[item.ex.id];
       persist();
       renderToday();
     };
     top.appendChild(swap);
     card.appendChild(top);
 
+    /* What happened last time, and whether that earns more weight today. */
+    const target = targetFor(item, key);
+    if (target) {
+      const { last, prog } = target;
+      const when = keyToDate(last.key).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      const load = last.weight != null ? esc(last.weight) + ' ' + settings.units + ' × ' : '';
+      const line = document.createElement('div');
+      line.className = 'ex-last' + (prog.advance ? ' advance' : '');
+      line.innerHTML =
+        '<span class="last-label">' + esc(when) + ': ' + load + esc(prog.reps.join('·')) + '</span>' +
+        (prog.advance
+          ? '<span class="last-cta">try ' + prog.weight + ' ' + settings.units + '</span>'
+          : '');
+      card.appendChild(line);
+    }
+
     const bottom = document.createElement('div');
     bottom.className = 'ex-bottom';
+
+    const range = repRange(item.reps);
+    const loggedReps = (rec.reps && rec.reps[item.ex.id]) || [];
 
     const setWrap = document.createElement('div');
     setWrap.className = 'sets';
     for (let s = 1; s <= item.sets; s++) {
       const b = document.createElement('button');
-      b.className = 'set' + (s <= doneSets ? ' done' : '');
-      b.textContent = s;
-      b.onclick = () => {
-        // tapping a set marks everything up to it done; tapping the last done set clears it
-        rec.sets[item.index] = (doneSets === s) ? s - 1 : s;
-        persist();
-        renderToday();
-        if (rec.sets[item.index] === s && s < item.sets) {
-          startRest(item.rest, 'Set ' + (s + 1) + ' of ' + item.sets + ' · ' + item.ex.name);
-        }
-      };
+      const isDone = s <= doneSets;
+      b.className = 'set' + (isDone ? ' done' : '');
+
+      if (range && isDone && loggedReps[s - 1]) {
+        b.textContent = loggedReps[s - 1];
+        b.classList.add('has-reps');
+        if (loggedReps[s - 1] >= range.hi) b.classList.add('at-top');
+        b.setAttribute('aria-label',
+          `Set ${s} of ${item.sets}: ${loggedReps[s - 1]} reps. Tap to log fewer.`);
+      } else {
+        b.textContent = s;
+        b.setAttribute('aria-label', `Log set ${s} of ${item.sets} for ${item.ex.name}`);
+      }
+
+      b.onclick = () => logSet(item, s, doneSets, range, rec, key);
       setWrap.appendChild(b);
     }
     bottom.appendChild(setWrap);
@@ -167,7 +280,8 @@ function renderToday() {
       const input = document.createElement('input');
       input.type = 'number';
       input.inputMode = 'decimal';
-      input.placeholder = weights[item.ex.id] || '—';
+      // placeholder shows what to load: the progression target if there is one
+      input.placeholder = target ? String(target.prog.weight) : (weights[item.ex.id] || '—');
       input.value = rec.weights[item.ex.id] || '';
       input.setAttribute('aria-label', 'Weight for ' + item.ex.name);
       input.onchange = () => {
@@ -612,6 +726,7 @@ function openFocusSheet() {
       ov.rerolls = {};
       const rec = record(key);
       rec.sets = {};
+      rec.reps = {};
       persist();
       $('focus-sheet').hidden = true;
       renderToday();

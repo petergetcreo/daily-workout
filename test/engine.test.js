@@ -367,6 +367,124 @@ test('dayNumber advances by exactly one per calendar day across boundaries', () 
   }
 });
 
+/* ---------- progression ---------- */
+
+test('repRange reads explicit windows, bare numbers, and timed work', () => {
+  assert.deepStrictEqual(Engine.repRange('6-8'), { lo: 6, hi: 8 });
+  assert.deepStrictEqual(Engine.repRange('10-12'), { lo: 10, hi: 12 });
+  assert.deepStrictEqual(Engine.repRange('12 - 15'), { lo: 12, hi: 15 });
+  // a bare number gets a small band below it so a miss is loggable
+  assert.deepStrictEqual(Engine.repRange('8'), { lo: 6, hi: 8 });
+  assert.deepStrictEqual(Engine.repRange('2'), { lo: 1, hi: 2 }, 'must not produce a floor below 1');
+  // timed work has no rep window
+  assert.strictEqual(Engine.repRange('40 sec'), null);
+  assert.strictEqual(Engine.repRange('10 min'), null);
+  assert.strictEqual(Engine.repRange('45 sec'), null);
+  assert.strictEqual(Engine.repRange(null), null);
+  assert.strictEqual(Engine.repRange(''), null);
+});
+
+test('every scheme in the library yields either a rep window or timed work', () => {
+  for (const [type, byLen] of Object.entries(SCHEMES)) {
+    for (const len of LENGTHS) {
+      const reps = byLen[len].reps;
+      const range = Engine.repRange(reps);
+      const timed = /sec|min/i.test(String(reps));
+      assert.ok(range || timed, `scheme ${type}/${len} reps "${reps}" parses as neither`);
+      if (range) assert.ok(range.lo >= 1 && range.lo <= range.hi, `bad range for ${type}/${len}`);
+    }
+  }
+});
+
+test('progression advances only when every prescribed set reached the top', () => {
+  const range = { lo: 6, hi: 8 };
+  const step = 5, sets = 3;
+  // all sets at the top -> add weight
+  let p = Engine.progression({ weight: 155, reps: [8, 8, 8] }, range, step, sets);
+  assert.strictEqual(p.advance, true);
+  assert.strictEqual(p.weight, 160);
+  // one short set -> hold
+  p = Engine.progression({ weight: 155, reps: [8, 8, 7] }, range, step, sets);
+  assert.strictEqual(p.advance, false);
+  assert.strictEqual(p.weight, 155, 'should repeat the same load');
+  // exceeding the top still counts
+  p = Engine.progression({ weight: 155, reps: [9, 10, 8] }, range, step, sets);
+  assert.strictEqual(p.advance, true);
+  // bottom of the range -> hold
+  p = Engine.progression({ weight: 155, reps: [6, 6, 6] }, range, step, sets);
+  assert.strictEqual(p.advance, false);
+});
+
+test('an abandoned session does not earn a load increase', () => {
+  const range = { lo: 6, hi: 8 };
+  // one strong set out of three prescribed: the session never happened
+  let p = Engine.progression({ weight: 155, reps: [8] }, range, 5, 3);
+  assert.strictEqual(p.advance, false, 'a single set must not ratchet the load up');
+  assert.strictEqual(p.reason, 'incomplete');
+  assert.strictEqual(p.weight, 155);
+
+  p = Engine.progression({ weight: 155, reps: [8, 8] }, range, 5, 3);
+  assert.strictEqual(p.advance, false, 'two of three sets is still incomplete');
+
+  // and the moment it IS complete, it advances
+  p = Engine.progression({ weight: 155, reps: [8, 8, 8] }, range, 5, 3);
+  assert.strictEqual(p.advance, true);
+});
+
+test('extra sets beyond the prescription still advance', () => {
+  const p = Engine.progression({ weight: 155, reps: [8, 8, 8, 8] }, { lo: 6, hi: 8 }, 5, 3);
+  assert.strictEqual(p.advance, true, 'doing more than asked should not block progress');
+});
+
+test('progression holds when reps were never logged', () => {
+  const p = Engine.progression({ weight: 155, reps: [] }, { lo: 6, hi: 8 }, 5);
+  assert.strictEqual(p.advance, false);
+  assert.strictEqual(p.reason, 'no-reps');
+  assert.strictEqual(p.weight, 155, 'should still suggest repeating the load');
+});
+
+test('progression refuses to guess from missing or junk input', () => {
+  const range = { lo: 6, hi: 8 };
+  assert.strictEqual(Engine.progression(null, range, 5), null);
+  assert.strictEqual(Engine.progression({ weight: 155 }, null, 5), null);
+  assert.strictEqual(Engine.progression({ weight: 0, reps: [8] }, range, 5), null);
+  assert.strictEqual(Engine.progression({ weight: 'heavy', reps: [8] }, range, 5), null);
+  assert.strictEqual(Engine.progression({ weight: -100, reps: [8] }, range, 5), null);
+});
+
+test('progression ignores corrupt entries inside the reps array', () => {
+  const range = { lo: 6, hi: 8 };
+  const p = Engine.progression({ weight: 155, reps: [8, null, 8, undefined, NaN] }, range, 5);
+  assert.deepStrictEqual(p.reps, [8, 8], 'should filter to the real numbers');
+  assert.strictEqual(p.advance, true);
+});
+
+test('progression accepts weights stored as strings, which is how they arrive', () => {
+  const p = Engine.progression({ weight: '155', reps: [8, 8, 8] }, { lo: 6, hi: 8 }, 5);
+  assert.strictEqual(p.advance, true);
+  assert.strictEqual(p.weight, 160, 'string weight must still do arithmetic, not concatenate');
+});
+
+test('load step matches the smallest real plate jump', () => {
+  assert.strictEqual(Engine.loadStep('lb'), 5);
+  assert.strictEqual(Engine.loadStep('kg'), 2.5);
+  assert.strictEqual(Engine.loadStep(undefined), 5, 'defaults to pounds');
+});
+
+test('a kilo progression does not produce unloadable fractions', () => {
+  const p = Engine.progression({ weight: 100, reps: [8, 8, 8] }, { lo: 6, hi: 8 }, Engine.loadStep('kg'));
+  assert.strictEqual(p.weight, 102.5);
+});
+
+test('repeated advancement climbs steadily rather than drifting', () => {
+  const range = { lo: 6, hi: 8 };
+  let weight = 135;
+  for (let week = 0; week < 10; week++) {
+    weight = Engine.progression({ weight, reps: [8, 8, 8] }, range, 5).weight;
+  }
+  assert.strictEqual(weight, 185, '10 weeks of hitting the top should be +50 lb, exactly');
+});
+
 /* ---------- maxes ---------- */
 
 test('applicable lifts are loaded compounds only', () => {

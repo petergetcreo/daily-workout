@@ -37,6 +37,37 @@ Two rules keep the output sensible:
 Session length rescales sets, reps, and slot count: Short ≈ 15–25 min,
 Standard ≈ 21–30 min, Long ≈ 41–52 min.
 
+## Logging sets and progressive overload
+
+Tapping a set is the main interaction, so it carries the weight:
+
+- **One tap logs the set at the top of the rep range.** Hitting your target is
+  a single tap — the common case costs nothing.
+- **Tapping an already-logged set counts it down one rep**, for the days you
+  came up short. The button shows the reps performed rather than the set number.
+- **Dropping below the bottom of the range un-logs** that set and any after it.
+- Sets that reached the top of the range get a green ring, so a good session is
+  readable at a glance.
+- Timed work (planks, intervals) has no rep range and just toggles done.
+
+The default for a newly logged set is the top of the range, or what you managed
+last time if that was lower — so a bad week doesn't make you tap five times per
+set to correct it.
+
+**Progression** uses double progression: work inside the rep window at a fixed
+load, and once *every prescribed set* reaches the top of the window, the app
+suggests adding weight (5 lb, or 2.5 kg). The suggestion appears on the card
+next to what you did last time, and becomes the placeholder in the weight field.
+
+Two deliberate restraints:
+
+- An **unfinished session never earns an increase**. Logging one strong set and
+  walking away would otherwise ratchet the suggested load up off work that
+  never happened.
+- **Bodyweight movements show history but no suggestion.** When you top out the
+  rep range on push-ups the next step is a harder variation, which is a
+  judgement call rather than arithmetic.
+
 ## Tracking
 
 **Body weight** (Progress tab) — one entry per day, logged in whatever unit is
@@ -113,9 +144,10 @@ direction — the engine should never reach back into the UI.
 npm test          # or: node --test test/engine.test.js
 ```
 
-29 tests covering library integrity, the rotation, plan generation across five
+41 tests covering library integrity, the rotation, plan generation across five
 equipment setups × three session lengths × a full year of dates, determinism,
-reroll behaviour, local-vs-UTC date handling, and the 1RM math.
+reroll behaviour, local-vs-UTC date handling, rep-range parsing, progression
+rules, and the 1RM math.
 
 The suite has been mutation-tested — deliberately breaking the primary-slot
 preference, the date handling, the Epley formula, reroll determinism, the
@@ -168,7 +200,8 @@ but iOS blocks service workers on insecure origins, so it will not work offline.
 Everything is in `localStorage` on the device — nothing leaves the phone. Keys:
 `dw.settings`, `dw.log` (per-day sets and completion), `dw.weights` (last
 working weight per lift), `dw.overrides` (focus changes and swaps),
-`dw.body` (body weight), `dw.maxes`.
+`dw.body` (body weight), `dw.maxes`. Reps live in `dw.log` under
+`[date].reps[exerciseId]` as an array, one entry per completed set.
 
 All dates are keyed to your **local** calendar day, not UTC, so a late-night
 weigh-in files under the day you were actually living in.

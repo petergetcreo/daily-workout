@@ -189,6 +189,58 @@
     return Math.round(sec / 60);
   }
 
+  /* ---------------- progression ---------------- */
+
+  /* Turn a prescription into a rep window. "6-8" is explicit; a bare "8" gets
+     a small band below it so there is somewhere to log a miss. Timed work
+     ("40 sec", "10 min") has no rep window at all. */
+  function repRange(reps) {
+    if (reps == null) return null;
+    const s = String(reps).trim();
+    if (/sec|min/i.test(s)) return null;
+    const span = s.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+    if (span) {
+      const lo = +span[1], hi = +span[2];
+      return lo <= hi ? { lo, hi } : { lo: hi, hi: lo };
+    }
+    const one = s.match(/^(\d+)$/);
+    if (one) {
+      const n = +one[1];
+      return { lo: Math.max(1, n - 2), hi: n };
+    }
+    return null;
+  }
+
+  /* Double progression: work inside the rep window at a fixed load, and once
+     every prescribed set reaches the top of the window, add weight.
+
+     `minSets` matters more than it looks. Without it, logging one strong set
+     and then abandoning the session would earn a load increase for work that
+     never happened, and the suggested weight would ratchet up off a single
+     good set. An unfinished session holds instead. */
+  function progression(last, range, step, minSets) {
+    if (!last || !range) return null;
+    const weight = parseFloat(last.weight);
+    if (!isFinite(weight) || weight <= 0) return null;
+
+    const reps = Array.isArray(last.reps) ? last.reps.filter(n => Number.isFinite(n) && n > 0) : [];
+    const need = (Number.isFinite(minSets) && minSets > 0) ? minSets : 1;
+
+    if (!reps.length)     return { weight, advance: false, reason: 'no-reps', reps };
+    if (reps.length < need) return { weight, advance: false, reason: 'incomplete', reps };
+
+    if (reps.every(r => r >= range.hi)) {
+      return { weight: Math.round((weight + step) * 10) / 10, advance: true, reason: 'hit-top', reps };
+    }
+    return { weight, advance: false, reason: 'hold', reps };
+  }
+
+  /* Smallest jump worth making. Plate math in pounds bottoms out at 5 (a pair
+     of 2.5s); in kilos, 2.5 (a pair of 1.25s). */
+  function loadStep(units) {
+    return units === 'kg' ? 2.5 : 5;
+  }
+
   /* ---------------- lifts & maxes ---------------- */
 
   /* The loaded compound movements, where a recorded max is a meaningful
@@ -214,6 +266,7 @@
   return {
     dateKey, dayNumber, keyToDate,
     focusForDate, buildPlan, estimateMinutes,
+    repRange, progression, loadStep,
     maxableLifts, e1rm, exerciseById,
     // exposed for tests and for anything that needs to reason about slots
     SLOT_FALLBACK, PRIMARY_SLOTS,

@@ -9,7 +9,7 @@
    The whole app is ~50 KB, so the network round trip costs very little.
 
    Bump CACHE when the asset list below changes. */
-const CACHE = 'daily-workout-v4';
+const CACHE = 'daily-workout-v5';
 const NET_TIMEOUT = 2500;
 
 const ASSETS = [
