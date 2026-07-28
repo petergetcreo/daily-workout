@@ -6,16 +6,21 @@ generated on-device and stored in `localStorage`.
 
 ## How the programming works
 
-A 6-day rotation, keyed to the calendar date:
+A 7-day rotation, keyed to the calendar date — one full cycle per week, so a
+given focus always lands on the same weekday:
 
 | Day | Focus | What it is |
 |----:|-------|------------|
 | 1 | Push | Chest, shoulders, triceps |
 | 2 | Pull | Back, rear delts, biceps |
 | 3 | Legs | Squat, hinge, single leg |
-| 4 | Engine + Core | Conditioning and midsection |
+| 4 | Recovery | Mobility and easy movement |
 | 5 | Full Body | One of everything, moving |
-| 6 | Recovery | Mobility and easy movement |
+| 6 | Engine + Core | Conditioning and midsection |
+| 7 | Recovery | Mobility and easy movement |
+
+Each muscle gets its direct day plus a second touch on Full Body day (~2× a
+week), and the two recovery days split the hard training days apart.
 
 Each day the app fills that focus's *slots* (e.g. Push = main press, second
 press, accessory, triceps) from `exercises.js`, then adds a 3-move warm-up and a
@@ -23,9 +28,15 @@ conditioning finisher.
 
 Selection is **deterministic from the date** — the same day always produces the
 same workout, so it will not reshuffle when you close and reopen the app
-mid-session. Different days produce different workouts.
+mid-session. Different days produce different workouts, with one deliberate
+exception:
 
-Two rules keep the output sensible:
+- **Primary lifts run in 21-day blocks.** The heavy slots (main press, rows,
+  squat, hinge) pick the same movements for a whole block, then rotate. Double
+  progression needs to see the same lift week after week to work; accessories
+  still vary day to day, where novelty is cheap.
+
+Rules that keep the output sensible:
 
 - **Equipment filtering.** An exercise only appears if *every* piece of gear it
   needs is switched on in Settings. Turn off the rack and bench and you get a
@@ -33,9 +44,18 @@ Two rules keep the output sensible:
 - **Primary slots prefer load.** If a rack is available, Push day opens with a
   press, not a push-up. Bodyweight movements fill primary slots only when
   nothing loaded is available.
+- **Warm-ups lean toward the day.** Leg day warms up hips and ankles, not
+  shoulders; upper days get arm circles and scap work.
+- **The finisher avoids the day's trained muscles.** No kettlebell swing ladder
+  stacked on top of leg day.
+- **The day's first heavy compound gets ramp-up sets** (~50% × 5, ~75% × 3,
+  rounded to plate math) once a working weight is known, instead of jumping
+  straight to work-set load.
 
 Session length rescales sets, reps, and slot count: Short ≈ 15–25 min,
-Standard ≈ 21–30 min, Long ≈ 41–52 min.
+Standard ≈ 21–30 min, Long ≈ 41–52 min. Short days cut date-rotated non-primary
+slots — not always the same tail — so arms and calves still show up over a week
+of short sessions.
 
 ## Logging sets and progressive overload
 
@@ -58,6 +78,11 @@ set to correct it.
 load, and once *every prescribed set* reaches the top of the window, the app
 suggests adding weight (5 lb, or 2.5 kg). The suggestion appears on the card
 next to what you did last time, and becomes the placeholder in the weight field.
+
+**Stalls deload instead of holding forever.** Three consecutive completed
+sessions at the same load without hitting the top of the window and the
+suggestion becomes a ~10% drop (rounded to plate math) to rebuild from —
+double progression is only self-correcting if it has an exit.
 
 Two deliberate restraints:
 
@@ -144,10 +169,11 @@ direction — the engine should never reach back into the UI.
 npm test          # or: node --test test/engine.test.js
 ```
 
-41 tests covering library integrity, the rotation, plan generation across five
+62 tests covering library integrity, the rotation, plan generation across five
 equipment setups × three session lengths × a full year of dates, determinism,
-reroll behaviour, local-vs-UTC date handling, rep-range parsing, progression
-rules, and the 1RM math.
+training blocks, reroll behaviour, short-session slot rotation, warm-up and
+finisher steering, ramp-up sets, local-vs-UTC date handling, rep-range parsing,
+progression and deload rules, and the 1RM math.
 
 The suite has been mutation-tested — deliberately breaking the primary-slot
 preference, the date handling, the Epley formula, reroll determinism, the

@@ -167,6 +167,25 @@ li.done .tick, .set.done { border-color: var(--good); background: var(--good); c
   border-radius: 6px;
   padding: 2px 7px;
 }
+.ex-last .last-cta.deload {
+  color: var(--muted);
+  background: rgba(139,147,165,.14);
+}
+
+/* ramp-up sets before the first heavy compound */
+.ex-ramp {
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.ex-ramp .ramp-label {
+  color: var(--text);
+  font-weight: 600;
+  margin-right: 8px;
+}
 
 .ex-bottom {
   display: flex;

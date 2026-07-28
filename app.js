@@ -52,10 +52,13 @@ function buildPlan(key) {
 
 /* ======================= performance history ======================= */
 
-/* Most recent session before `beforeKey` in which this movement was performed.
-   Counts a session if EITHER a weight or any reps were logged, so bodyweight
-   work gets a history too. Returns { key, weight, reps } or null. */
-function lastPerformance(exId, beforeKey) {
+/* Up to `limit` most recent sessions before `beforeKey` in which this
+   movement was performed, newest first. Counts a session if EITHER a weight
+   or any reps were logged, so bodyweight work gets a history too.
+   Returns [{ key, weight, reps }]. Fetching a few sessions rather than one is
+   what lets the engine spot a lift stalled at the same load for weeks. */
+function performanceHistory(exId, beforeKey, limit) {
+  const out = [];
   const keys = Object.keys(logs).filter(k => k < beforeKey).sort().reverse();
   for (const k of keys) {
     const r = logs[k];
@@ -64,9 +67,10 @@ function lastPerformance(exId, beforeKey) {
     const reps = (r.reps && r.reps[exId]) || [];
     const hasWeight = weight != null && weight !== '';
     if (!hasWeight && !reps.length) continue;
-    return { key: k, weight: hasWeight ? weight : null, reps };
+    out.push({ key: k, weight: hasWeight ? weight : null, reps });
+    if (out.length >= limit) break;
   }
-  return null;
+  return out;
 }
 
 /* What to aim for today, given last time.
@@ -78,14 +82,16 @@ function lastPerformance(exId, beforeKey) {
 function targetFor(item, beforeKey) {
   const range = repRange(item.reps);
   if (!range) return null;
-  const last = lastPerformance(item.ex.id, beforeKey);
+  const history = performanceHistory(item.ex.id, beforeKey, Engine.STALL_SESSIONS + 2);
+  const last = history[0];
   if (!last) return null;
 
   if (!item.ex.load || last.weight == null) {
     if (!last.reps.length) return null;
     return { last, range, prog: { weight: null, advance: false, reason: 'bodyweight', reps: last.reps } };
   }
-  const prog = Engine.progression(last, range, Engine.loadStep(settings.units), item.sets);
+  const holds = Engine.countHolds(history, range, item.sets);
+  const prog = Engine.progression(last, range, Engine.loadStep(settings.units), item.sets, holds);
   return prog ? { last, range, prog } : null;
 }
 
@@ -130,13 +136,16 @@ function logSet(item, s, doneSets, range, rec, key) {
   rec.reps = rec.reps || {};
   const reps = (rec.reps[item.ex.id] || []).slice();
   const wasDone = s <= doneSets;
+  const t = range ? targetFor(item, key) : null;
 
   if (!range) {
     rec.sets[item.index] = wasDone && doneSets === s ? s - 1 : s;
   } else if (!wasDone) {
-    // default new sets to the top of the range, or to what was logged last time
-    const t = targetFor(item, key);
-    const fallback = (t && t.prog.advance) ? range.hi
+    // default new sets to the top of the range, or to what was logged last
+    // time. A deload day defaults to the top like an advance does — at the
+    // lighter load the target is the full window, not the stalled rep count
+    // (which taps can only count down from, never up).
+    const fallback = (t && (t.prog.advance || t.prog.reason === 'deload')) ? range.hi
                    : (t && t.prog.reps.length ? Math.max(...t.prog.reps) : range.hi);
     for (let i = doneSets; i < s; i++) {
       if (reps[i] == null) reps[i] = Math.min(range.hi, Math.max(range.lo, fallback));
@@ -156,6 +165,18 @@ function logSet(item, s, doneSets, range, rec, key) {
     reps.length = Math.min(reps.length, rec.sets[item.index] || 0);
     if (reps.length) rec.reps[item.ex.id] = reps;
     else delete rec.reps[item.ex.id];
+  }
+
+  /* Following the suggested load without typing it must still count as
+     lifting it — otherwise the session stores no weight, stall tracking
+     resets, and a deload never takes effect. First completed set banks the
+     suggestion (or the sticky working weight) as this session's load. */
+  if (!wasDone && item.ex.load && rec.weights[item.ex.id] == null) {
+    const suggested = (t && t.prog.weight != null) ? t.prog.weight : weights[item.ex.id];
+    if (suggested != null && suggested !== '') {
+      rec.weights[item.ex.id] = String(suggested);
+      weights[item.ex.id] = String(suggested);
+    }
   }
 
   const nowDone = rec.sets[item.index] || 0;
@@ -241,8 +262,25 @@ function renderToday() {
         '<span class="last-label">' + esc(when) + ': ' + load + esc(prog.reps.join('·')) + '</span>' +
         (prog.advance
           ? '<span class="last-cta">try ' + prog.weight + ' ' + settings.units + '</span>'
-          : '');
+          : prog.reason === 'deload'
+            ? '<span class="last-cta deload">stalled — drop to ' + prog.weight + ' ' + settings.units + '</span>'
+            : '');
       card.appendChild(line);
+    }
+
+    /* ramp-up sets before the day's first heavy compound, once a working
+       weight is known to ramp toward */
+    if (item.ramp) {
+      const workW = parseFloat(rec.weights[item.ex.id] || (target && target.prog.weight) || weights[item.ex.id]);
+      const ramp = Engine.rampSets(workW, settings.units);
+      if (ramp.length) {
+        const rl = document.createElement('div');
+        rl.className = 'ex-ramp';
+        rl.innerHTML = '<span class="ramp-label">Ramp up</span>' +
+          ramp.map(r => esc(r.weight) + ' × ' + r.reps).join(' · ') +
+          ', then work sets';
+        card.appendChild(rl);
+      }
     }
 
     const bottom = document.createElement('div');
@@ -280,8 +318,12 @@ function renderToday() {
       const input = document.createElement('input');
       input.type = 'number';
       input.inputMode = 'decimal';
-      // placeholder shows what to load: the progression target if there is one
-      input.placeholder = target ? String(target.prog.weight) : (weights[item.ex.id] || '—');
+      // placeholder shows what to load: the progression target if there is
+      // one (a weightless last session has none — fall back to the sticky
+      // working weight rather than rendering "null")
+      input.placeholder = (target && target.prog.weight != null)
+        ? String(target.prog.weight)
+        : (weights[item.ex.id] || '—');
       input.value = rec.weights[item.ex.id] || '';
       input.setAttribute('aria-label', 'Weight for ' + item.ex.name);
       input.onchange = () => {
@@ -716,7 +758,8 @@ function openFocusSheet() {
   const cur = buildPlan(key).focusId;
   const box = $('focus-options');
   box.innerHTML = '';
-  FOCUS_ORDER.forEach(id => {
+  // recovery appears twice in the weekly rotation; list each focus once
+  [...new Set(FOCUS_ORDER)].forEach(id => {
     const b = document.createElement('button');
     b.className = 'focus-opt' + (id === cur ? ' on' : '');
     b.innerHTML = '<span>' + esc(FOCI[id].label) + '<small>' + esc(FOCI[id].blurb) + '</small></span>';

@@ -36,6 +36,14 @@
     return new Date(y, m - 1, d);
   }
 
+  /* Training blocks. Primary lifts hold steady for a whole block — double
+     progression only bites when the same lift shows up week after week — and
+     rotate when the block turns over. Accessories still vary day to day. */
+  const BLOCK_DAYS = 21;
+  function blockFor(key) {
+    return Math.floor(dayNumber(key) / BLOCK_DAYS);
+  }
+
   /* ---------------- deterministic randomness ---------------- */
 
   function hash(str) {
@@ -94,6 +102,12 @@
      press, not a push-up. */
   const PRIMARY_SLOTS = new Set(['push_main', 'push_second', 'pull_horiz', 'pull_vert', 'squat', 'hinge']);
 
+  /* Which half of the body each focus day trains. Warm-ups lean TOWARD the
+     day's bias (warm up what you are about to load); finishers steer AWAY
+     from it (no swing ladder on top of a leg day). */
+  const FOCUS_BIAS  = { push: 'upper', pull: 'upper', legs: 'lower', engine: 'full', full: 'full', recover: 'full' };
+  const FOCUS_AVOID = { push: 'upper', pull: 'upper', legs: 'lower' };
+
   function eligible(item, equip) {
     return item.equip.every(code => equip[code]);
   }
@@ -130,42 +144,78 @@
     const focusId = focusForDate(key, ov);
     const focus = FOCI[focusId];
 
-    /* slot list scaled by session length */
-    let slots = focus.slots.slice();
-    if (len === 'short') slots = slots.slice(0, Math.max(2, Math.ceil(slots.length * 0.6)));
-    if (len === 'long')  slots = slots.concat(focus.extra || []);
+    /* slot list scaled by session length. Short days cut slots chosen by the
+       date rather than always the same tail, so triceps or calves are trimmed
+       some days instead of never happening at all. The lead slot and the
+       heavy work are never cut.
+
+       Each slot keeps its ORIGINAL position as `i` — logged sets and rerolls
+       are keyed by that index in storage, so it must not shift when the
+       session length changes mid-day. */
+    let slots = focus.slots.map((s, i) => ({ s, i }));
+    if (len === 'short') {
+      const keep = Math.max(2, Math.ceil(slots.length * 0.6));
+      const spare = slots.filter(x => x.i > 0 && !PRIMARY_SLOTS.has(x.s));
+      const drop = new Set();
+      const start = spare.length ? seededIndex(key + '|trim', spare.length) : 0;
+      for (let j = 0; j < spare.length && slots.length - drop.size > keep; j++) {
+        drop.add(spare[(start + j) % spare.length].i);
+      }
+      slots = slots.filter(x => !drop.has(x.i));
+      if (slots.length > keep) slots = slots.slice(0, keep);
+    }
+    if (len === 'long') {
+      (focus.extra || []).forEach((s, j) => slots.push({ s, i: focus.slots.length + j }));
+    }
 
     /* main work */
     const used = new Set();
     const main = [];
-    slots.forEach((slot, i) => {
+    let rampAssigned = false;
+    slots.forEach(({ s: slot, i }) => {
       const pool = poolFor(slot, used, equip);
       if (!pool.length) return;
       const roll = (ov.rerolls && ov.rerolls[i]) || 0;
       // Re-rolling walks deterministically through a shuffled view of the pool.
-      const start = seededIndex(key + '|' + slot + '|' + i, pool.length);
+      // Primary slots seed from the training block, not the date, so the same
+      // heavy lifts recur all block and progression has something to grip.
+      const sticky = PRIMARY_SLOTS.has(slot);
+      const seed = (sticky ? 'b' + blockFor(key) : key) + '|' + slot + '|' + i;
+      const start = seededIndex(seed, pool.length);
       const ex = pool[(start + roll) % pool.length];
       used.add(ex.id);
       const scheme = SCHEMES[ex.type][len];
-      main.push({ slot, index: i, ex, sets: scheme.sets, reps: scheme.reps, rest: REST[ex.type] || 60 });
+      // the day's first heavy compound gets ramp-up sets before its work sets
+      const ramp = !rampAssigned && sticky && ex.load && ex.type === 'compound';
+      if (ramp) rampAssigned = true;
+      main.push({ slot, index: i, ex, sets: scheme.sets, reps: scheme.reps, rest: REST[ex.type] || 60, primary: sticky, ramp });
     });
 
-    /* warm-up: three movements */
-    const warmPool = EXERCISES.filter(e => e.slots.includes('warmup') && eligible(e, equip));
+    /* warm-up: three movements, leaning toward the half of the body the day
+       trains, topped up from the full pool if the biased one runs dry */
+    const bias = FOCUS_BIAS[focusId] || 'full';
+    const warmAll = EXERCISES.filter(e => e.slots.includes('warmup') && eligible(e, equip));
+    const warmPool = bias === 'full' ? warmAll : warmAll.filter(e => e.bias === bias || e.bias === 'full');
     const warm = [];
     const wUsed = new Set();
     for (let i = 0; i < 3; i++) {
-      const p = warmPool.filter(e => !wUsed.has(e.id));
+      let p = warmPool.filter(e => !wUsed.has(e.id));
+      if (!p.length) p = warmAll.filter(e => !wUsed.has(e.id));
       if (!p.length) break;
       const w = pick(p, key + '|warm|' + i);
       wUsed.add(w.id);
       warm.push({ ex: w, dose: w.id === 'light-cardio' ? '3 min' : '30 sec' });
     }
 
-    /* finisher */
+    /* finisher — never one that hammers what the day already trained */
     let finisher = null;
     if (focus.finisher) {
-      const fPool = FINISHERS.filter(f => eligible(f, equip));
+      let fPool = FINISHERS.filter(f => eligible(f, equip));
+      const avoid = FOCUS_AVOID[focusId];
+      if (avoid) {
+        const kept = fPool.filter(f => f.stress !== avoid);
+        if (kept.length) fPool = kept;
+      }
       if (fPool.length) {
         const roll = ov.finisherRoll || 0;
         const start = seededIndex(key + '|fin', fPool.length);
@@ -217,8 +267,42 @@
      `minSets` matters more than it looks. Without it, logging one strong set
      and then abandoning the session would earn a load increase for work that
      never happened, and the suggested weight would ratchet up off a single
-     good set. An unfinished session holds instead. */
-  function progression(last, range, step, minSets) {
+     good set. An unfinished session holds instead.
+
+     `holds` is how many consecutive recent sessions stalled at this load (see
+     countHolds). Without an exit, a stalled lift would be told to repeat the
+     same weight forever — after STALL_SESSIONS stalls the suggestion becomes
+     a ~10% deload to rebuild from. */
+  const STALL_SESSIONS = 3;
+
+  function deloadWeight(weight, step) {
+    // strictly below the current load — rounding to plate math must not climb
+    // back up to the stalled weight — but never below a single step
+    const rounded = Math.round((weight * 0.9) / step) * step;
+    return Math.max(step, Math.min(rounded, weight - step));
+  }
+
+  /* Count consecutive recent sessions, newest first, completed at the same
+     load without every set reaching the top of the window. A load change, an
+     incomplete session, or a session that earned an advance ends the streak. */
+  function countHolds(history, range, minSets) {
+    if (!Array.isArray(history) || !history.length || !range) return 0;
+    const w0 = parseFloat(history[0] && history[0].weight);
+    if (!isFinite(w0) || w0 <= 0) return 0;
+    const need = (Number.isFinite(minSets) && minSets > 0) ? minSets : 1;
+    let n = 0;
+    for (const h of history) {
+      const w = parseFloat(h && h.weight);
+      if (w !== w0) break;
+      const reps = Array.isArray(h.reps) ? h.reps.filter(r => Number.isFinite(r) && r > 0) : [];
+      if (reps.length < need) break;
+      if (reps.every(r => r >= range.hi)) break;
+      n++;
+    }
+    return n;
+  }
+
+  function progression(last, range, step, minSets, holds) {
     if (!last || !range) return null;
     const weight = parseFloat(last.weight);
     if (!isFinite(weight) || weight <= 0) return null;
@@ -232,6 +316,9 @@
     if (reps.every(r => r >= range.hi)) {
       return { weight: Math.round((weight + step) * 10) / 10, advance: true, reason: 'hit-top', reps };
     }
+    if (Number.isFinite(holds) && holds >= STALL_SESSIONS) {
+      return { weight: deloadWeight(weight, step), advance: false, deload: true, reason: 'deload', reps };
+    }
     return { weight, advance: false, reason: 'hold', reps };
   }
 
@@ -239,6 +326,25 @@
      of 2.5s); in kilos, 2.5 (a pair of 1.25s). */
   function loadStep(units) {
     return units === 'kg' ? 2.5 : 5;
+  }
+
+  /* Ramp-up sets before the day's first heavy compound: ascending sets at
+     ~50% and ~75% of the working load, rounded to plate math, before jumping
+     into work sets. Trivial loads get no ramp — there is nothing to warm up
+     to under an empty-bar's worth of weight. */
+  function rampSets(weight, units) {
+    const w = parseFloat(weight);
+    const step = loadStep(units);
+    if (!isFinite(w) || w <= step * 2) return [];
+    const at = pct => Math.max(step, Math.round((w * pct) / step) * step);
+    const out = [];
+    for (const r of [{ pct: 0.5, reps: 5 }, { pct: 0.75, reps: 3 }]) {
+      const rw = at(r.pct);
+      if (rw >= w) continue;
+      if (out.length && out[out.length - 1].weight === rw) continue;
+      out.push({ weight: rw, reps: r.reps });
+    }
+    return out;
   }
 
   /* ---------------- lifts & maxes ---------------- */
@@ -264,11 +370,12 @@
   }
 
   return {
-    dateKey, dayNumber, keyToDate,
+    dateKey, dayNumber, keyToDate, blockFor,
     focusForDate, buildPlan, estimateMinutes,
-    repRange, progression, loadStep,
+    repRange, progression, countHolds, loadStep, rampSets,
     maxableLifts, e1rm, exerciseById,
     // exposed for tests and for anything that needs to reason about slots
-    SLOT_FALLBACK, PRIMARY_SLOTS,
+    SLOT_FALLBACK, PRIMARY_SLOTS, FOCUS_BIAS, FOCUS_AVOID,
+    BLOCK_DAYS, STALL_SESSIONS,
   };
 }));

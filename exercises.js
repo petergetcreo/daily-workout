@@ -98,41 +98,45 @@ const EXERCISES = [
   { id: 'machine-int',   name: 'Machine Intervals',          slots: ['cardio'],                     equip: ['cardio'],       type: 'cardio',    load: false, cue: 'Treadmill, bike, or rower. Hard effort, then easy.' },
   { id: 'machine-steady',name: 'Steady-State Cardio',        slots: ['cardio'],                     equip: ['cardio'],       type: 'cardio',    load: false, cue: 'Conversational pace. You should be able to talk.' },
 
-  /* ---------- MOBILITY / RECOVERY ---------- */
-  { id: 'wgs',           name: "World's Greatest Stretch",   slots: ['mobility', 'warmup'],         equip: ['bw'],           type: 'mobility',  load: false, cue: 'Lunge, elbow to instep, rotate and reach up.' },
-  { id: 'cat-cow',       name: 'Cat-Cow',                    slots: ['mobility', 'warmup'],         equip: ['bw'],           type: 'mobility',  load: false, cue: 'Move one vertebra at a time. Breathe with it.' },
+  /* ---------- MOBILITY / RECOVERY ----------
+     Anything that can appear in a warm-up carries a `bias` — upper, lower, or
+     full — so the warm-up can lean toward the day being trained. */
+  { id: 'wgs',           name: "World's Greatest Stretch",   slots: ['mobility', 'warmup'],         equip: ['bw'],           type: 'mobility',  load: false, bias: 'full',  cue: 'Lunge, elbow to instep, rotate and reach up.' },
+  { id: 'cat-cow',       name: 'Cat-Cow',                    slots: ['mobility', 'warmup'],         equip: ['bw'],           type: 'mobility',  load: false, bias: 'full',  cue: 'Move one vertebra at a time. Breathe with it.' },
   { id: '90-90',         name: '90/90 Hip Switch',           slots: ['mobility'],                   equip: ['bw'],           type: 'mobility',  load: false, cue: 'Sit tall, rotate knee to knee without using hands.' },
   { id: 'couch-stretch', name: 'Couch Stretch',              slots: ['mobility'],                   equip: ['bw'],           type: 'mobility',  load: false, cue: 'Rear foot up a wall or bench. Squeeze that glute.' },
-  { id: 'thoracic-rot',  name: 'Thoracic Rotation',          slots: ['mobility', 'warmup'],         equip: ['bw'],           type: 'mobility',  load: false, cue: 'Side-lying, open the top arm, follow it with your eyes.' },
+  { id: 'thoracic-rot',  name: 'Thoracic Rotation',          slots: ['mobility', 'warmup'],         equip: ['bw'],           type: 'mobility',  load: false, bias: 'upper', cue: 'Side-lying, open the top arm, follow it with your eyes.' },
   { id: 'pigeon',        name: 'Pigeon Stretch',             slots: ['mobility'],                   equip: ['bw'],           type: 'mobility',  load: false, cue: 'Front shin angled, hips square, sink slowly.' },
   { id: 'hamstring-str', name: 'Standing Hamstring Stretch', slots: ['mobility'],                   equip: ['bw'],           type: 'mobility',  load: false, cue: 'Hinge, flat back. Never round to reach further.' },
-  { id: 'shoulder-dis',  name: 'Barbell Shoulder Dislocates',slots: ['mobility', 'warmup'],         equip: ['bar'],          type: 'mobility',  load: false, cue: 'Empty bar, wide grip. Slow arc overhead and back.' },
+  { id: 'shoulder-dis',  name: 'Barbell Shoulder Dislocates',slots: ['mobility', 'warmup'],         equip: ['bar'],          type: 'mobility',  load: false, bias: 'upper', cue: 'Empty bar, wide grip. Slow arc overhead and back.' },
   { id: 'deep-squat-hold',name: 'Deep Squat Hold',           slots: ['mobility'],                   equip: ['bw'],           type: 'mobility',  load: false, cue: 'Sit in the bottom, elbows pry the knees open.' },
   { id: 'easy-walk',     name: 'Easy Walk or Spin',          slots: ['mobility'],                   equip: ['cardio'],       type: 'cardio',    load: false, cue: 'Nose breathing only. This is recovery, not training.' },
 
   /* ---------- WARM-UP ONLY ---------- */
-  { id: 'arm-circles',   name: 'Arm Circles',                slots: ['warmup'],                     equip: ['bw'],           type: 'mobility',  load: false, cue: 'Small to large, both directions.' },
-  { id: 'leg-swings',    name: 'Leg Swings',                 slots: ['warmup'],                     equip: ['bw'],           type: 'mobility',  load: false, cue: 'Front-to-back then side-to-side. Hold something.' },
-  { id: 'inchworm',      name: 'Inchworm',                   slots: ['warmup'],                     equip: ['bw'],           type: 'mobility',  load: false, cue: 'Walk the hands out to a plank, walk the feet in.' },
-  { id: 'glute-bridge',  name: 'Glute Bridge',               slots: ['warmup'],                     equip: ['bw'],           type: 'mobility',  load: false, cue: 'Wake the glutes up. Squeeze hard at the top.' },
-  { id: 'jumping-jack',  name: 'Jumping Jacks',              slots: ['warmup'],                     equip: ['bw'],           type: 'mobility',  load: false, cue: 'Just raising the heart rate. Stay light.' },
-  { id: 'hip-circles',   name: 'Hip Circles',                slots: ['warmup'],                     equip: ['bw'],           type: 'mobility',  load: false, cue: 'Hands on hips, big slow circles each way.' },
-  { id: 'ankle-rock',    name: 'Ankle Rockers',              slots: ['warmup'],                     equip: ['bw'],           type: 'mobility',  load: false, cue: 'Knee past the toes, heel stays down.' },
-  { id: 'scap-pushup',   name: 'Scapular Push-Up',           slots: ['warmup'],                     equip: ['bw'],           type: 'mobility',  load: false, cue: 'Arms locked. Only the shoulder blades move.' },
-  { id: 'light-cardio',  name: '3 min Easy Cardio',          slots: ['warmup'],                     equip: ['cardio'],       type: 'mobility',  load: false, cue: 'Bike, row, or brisk treadmill walk to get warm.' },
+  { id: 'arm-circles',   name: 'Arm Circles',                slots: ['warmup'],                     equip: ['bw'],           type: 'mobility',  load: false, bias: 'upper', cue: 'Small to large, both directions.' },
+  { id: 'leg-swings',    name: 'Leg Swings',                 slots: ['warmup'],                     equip: ['bw'],           type: 'mobility',  load: false, bias: 'lower', cue: 'Front-to-back then side-to-side. Hold something.' },
+  { id: 'inchworm',      name: 'Inchworm',                   slots: ['warmup'],                     equip: ['bw'],           type: 'mobility',  load: false, bias: 'full',  cue: 'Walk the hands out to a plank, walk the feet in.' },
+  { id: 'glute-bridge',  name: 'Glute Bridge',               slots: ['warmup'],                     equip: ['bw'],           type: 'mobility',  load: false, bias: 'lower', cue: 'Wake the glutes up. Squeeze hard at the top.' },
+  { id: 'jumping-jack',  name: 'Jumping Jacks',              slots: ['warmup'],                     equip: ['bw'],           type: 'mobility',  load: false, bias: 'full',  cue: 'Just raising the heart rate. Stay light.' },
+  { id: 'hip-circles',   name: 'Hip Circles',                slots: ['warmup'],                     equip: ['bw'],           type: 'mobility',  load: false, bias: 'lower', cue: 'Hands on hips, big slow circles each way.' },
+  { id: 'ankle-rock',    name: 'Ankle Rockers',              slots: ['warmup'],                     equip: ['bw'],           type: 'mobility',  load: false, bias: 'lower', cue: 'Knee past the toes, heel stays down.' },
+  { id: 'scap-pushup',   name: 'Scapular Push-Up',           slots: ['warmup'],                     equip: ['bw'],           type: 'mobility',  load: false, bias: 'upper', cue: 'Arms locked. Only the shoulder blades move.' },
+  { id: 'light-cardio',  name: '3 min Easy Cardio',          slots: ['warmup'],                     equip: ['cardio'],       type: 'mobility',  load: false, bias: 'full',  cue: 'Bike, row, or brisk treadmill walk to get warm.' },
 ];
 
-/* Conditioning finishers. `equip` filters the same way. */
+/* Conditioning finishers. `equip` filters the same way. `stress` names the
+   region a finisher hammers hardest, so the engine can steer it away from the
+   day that already trained that region — no swing ladder straight after RDLs. */
 const FINISHERS = [
-  { id: 'f-emom',    name: 'EMOM 8',            equip: ['bw'],     detail: 'Every minute on the minute for 8 minutes: 10 burpees. Rest whatever is left of the minute.' },
-  { id: 'f-tabata',  name: 'Tabata Intervals',  equip: ['bw'],     detail: '20 seconds all out, 10 seconds rest, 8 rounds. Alternate jump squats and mountain climbers.' },
-  { id: 'f-ladder',  name: 'Descending Ladder', equip: ['bw'],     detail: '10-8-6-4-2 of push-ups and air squats. No rest until it is done.' },
-  { id: 'f-swings',  name: 'Swing Ladder',      equip: ['db'],     detail: 'Kettlebell swings: 10-15-20-15-10. Rest 30 seconds between sets.' },
-  { id: 'f-carry',   name: 'Loaded Carry',      equip: ['db'],     detail: '4 rounds: 40 seconds heavy farmer carry, 40 seconds rest. Go heavy enough that grip is the limiter.' },
-  { id: 'f-intervals',name:'Cardio Intervals',  equip: ['cardio'], detail: '6 rounds: 30 seconds hard, 90 seconds easy. Treadmill, bike, or rower.' },
-  { id: 'f-steady',  name: 'Steady Finish',     equip: ['cardio'], detail: '8 minutes at a conversational pace. Cool the system down, do not race it.' },
-  { id: 'f-amrap',   name: 'AMRAP 6',           equip: ['bw'],     detail: 'As many rounds as possible in 6 minutes: 5 push-ups, 10 air squats, 15 mountain climbers.' },
-  { id: 'f-core',    name: 'Core Triset',       equip: ['bw'],     detail: '3 rounds, no rest inside a round: 30s plank, 20 dead bugs, 30s hollow hold. Rest 45s between rounds.' },
+  { id: 'f-emom',    name: 'EMOM 8',            equip: ['bw'],     stress: 'mixed',  detail: 'Every minute on the minute for 8 minutes: 10 burpees. Rest whatever is left of the minute.' },
+  { id: 'f-tabata',  name: 'Tabata Intervals',  equip: ['bw'],     stress: 'lower',  detail: '20 seconds all out, 10 seconds rest, 8 rounds. Alternate jump squats and mountain climbers.' },
+  { id: 'f-ladder',  name: 'Descending Ladder', equip: ['bw'],     stress: 'upper',  detail: '10-8-6-4-2 of push-ups and air squats. No rest until it is done.' },
+  { id: 'f-swings',  name: 'Swing Ladder',      equip: ['db'],     stress: 'lower',  detail: 'Kettlebell swings: 10-15-20-15-10. Rest 30 seconds between sets.' },
+  { id: 'f-carry',   name: 'Loaded Carry',      equip: ['db'],     stress: 'mixed',  detail: '4 rounds: 40 seconds heavy farmer carry, 40 seconds rest. Go heavy enough that grip is the limiter.' },
+  { id: 'f-intervals',name:'Cardio Intervals',  equip: ['cardio'], stress: 'cardio', detail: '6 rounds: 30 seconds hard, 90 seconds easy. Treadmill, bike, or rower.' },
+  { id: 'f-steady',  name: 'Steady Finish',     equip: ['cardio'], stress: 'cardio', detail: '8 minutes at a conversational pace. Cool the system down, do not race it.' },
+  { id: 'f-amrap',   name: 'AMRAP 6',           equip: ['bw'],     stress: 'upper',  detail: 'As many rounds as possible in 6 minutes: 5 push-ups, 10 air squats, 15 mountain climbers.' },
+  { id: 'f-core',    name: 'Core Triset',       equip: ['bw'],     stress: 'core',   detail: '3 rounds, no rest inside a round: 30s plank, 20 dead bugs, 30s hollow hold. Rest 45s between rounds.' },
 ];
 
 /* Day rotation. `slots` are filled in order from the library above. */
@@ -145,7 +149,11 @@ const FOCI = {
   recover: { label: 'Recovery',      blurb: 'Mobility and easy movement',  slots: ['mobility', 'mobility', 'mobility', 'mobility', 'mobility'],  extra: ['mobility'],               finisher: false },
 };
 
-const FOCUS_ORDER = ['push', 'pull', 'legs', 'engine', 'full', 'recover'];
+/* One full cycle per calendar week. Each pattern gets its direct day plus the
+   full-body touch (~2× per muscle per week), and recovery lands twice,
+   breaking up the hard days. Period 7 also means a given focus falls on the
+   same weekday every week. */
+const FOCUS_ORDER = ['push', 'pull', 'legs', 'recover', 'full', 'engine', 'recover'];
 
 /* Set and rep schemes by exercise type, scaled by session length.
    `cardio` is one continuous block on a machine; `interval` is repeated

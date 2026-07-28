@@ -131,6 +131,27 @@ test('finishers only require known equipment', () => {
   }
 });
 
+test('every warm-up movement declares a bias', () => {
+  for (const e of EXERCISES.filter(e => e.slots.includes('warmup'))) {
+    assert.ok(['upper', 'lower', 'full'].includes(e.bias),
+      e.id + ' can appear in a warm-up but has bias "' + e.bias + '"');
+  }
+});
+
+test('every finisher declares the stress it loads', () => {
+  for (const f of FINISHERS) {
+    assert.ok(['upper', 'lower', 'mixed', 'cardio', 'core'].includes(f.stress),
+      f.id + ' has stress "' + f.stress + '"');
+  }
+});
+
+test('every focus has a warm-up bias', () => {
+  for (const id of Object.keys(FOCI)) {
+    assert.ok(['upper', 'lower', 'full'].includes(Engine.FOCUS_BIAS[id]),
+      'focus ' + id + ' has no usable bias');
+  }
+});
+
 /* ---------- rotation ---------- */
 
 test('rotation cycles through every focus in order', () => {
@@ -141,18 +162,36 @@ test('rotation cycles through every focus in order', () => {
     assert.strictEqual(seen[i], seen[i - FOCUS_ORDER.length],
       'rotation is not periodic at ' + keys[i]);
   }
-  assert.strictEqual(new Set(seen).size, FOCUS_ORDER.length, 'not every focus appears');
+  assert.strictEqual(new Set(seen).size, new Set(FOCUS_ORDER).size, 'not every focus appears');
 });
 
-test('a 30-day stretch is evenly spread across focuses', () => {
+test('the rotation is one calendar week: each pattern once, recovery twice', () => {
+  assert.strictEqual(FOCUS_ORDER.length, 7, 'rotation must span exactly a week');
   const counts = {};
-  for (const k of datesFrom('2026-03-01', 30)) {
+  FOCUS_ORDER.forEach(f => { counts[f] = (counts[f] || 0) + 1; });
+  assert.strictEqual(counts.recover, 2, 'expected two recovery days per week');
+  for (const f of ['push', 'pull', 'legs', 'engine', 'full']) {
+    assert.strictEqual(counts[f], 1, f + ' should appear exactly once per week');
+  }
+  // recovery days must not be adjacent, even across the cycle boundary
+  for (let i = 0; i < FOCUS_ORDER.length; i++) {
+    const next = FOCUS_ORDER[(i + 1) % FOCUS_ORDER.length];
+    assert.ok(!(FOCUS_ORDER[i] === 'recover' && next === 'recover'),
+      'back-to-back recovery days at position ' + i);
+  }
+});
+
+test('a 10-week stretch spreads focuses in proportion to the rotation', () => {
+  const freq = {};
+  FOCUS_ORDER.forEach(f => { freq[f] = (freq[f] || 0) + 1; });
+  const counts = {};
+  for (const k of datesFrom('2026-03-01', FOCUS_ORDER.length * 10)) {
     const f = Engine.focusForDate(k);
     counts[f] = (counts[f] || 0) + 1;
   }
-  assert.strictEqual(Object.keys(counts).length, FOCUS_ORDER.length);
-  for (const [f, n] of Object.entries(counts)) {
-    assert.strictEqual(n, 5, f + ' appeared ' + n + ' times in 30 days, expected 5');
+  for (const [f, n] of Object.entries(freq)) {
+    assert.strictEqual(counts[f], n * 10,
+      f + ' appeared ' + counts[f] + ' times in 10 weeks, expected ' + n * 10);
   }
 });
 
@@ -281,6 +320,173 @@ test('recovery days carry no finisher; training days do', () => {
       assert.ok(plan.finisher, 'training day has no finisher on ' + key);
     }
   }
+});
+
+/* ---------- training blocks ---------- */
+
+test('primary lifts hold steady within a block and rotate across blocks', () => {
+  const settings = settingsFor('garage', 'standard');
+  const byBlock = new Map();
+  for (const key of datesFrom('2026-01-01', Engine.BLOCK_DAYS * 6)) {
+    const plan = Engine.buildPlan(key, settings);
+    if (plan.focusId !== 'push') continue;
+    const primaries = plan.main
+      .filter(m => Engine.PRIMARY_SLOTS.has(m.slot))
+      .map(m => m.ex.id).join();
+    const b = Engine.blockFor(key);
+    if (!byBlock.has(b)) byBlock.set(b, new Set());
+    byBlock.get(b).add(primaries);
+  }
+  for (const [b, picks] of byBlock) {
+    assert.strictEqual(picks.size, 1,
+      'block ' + b + ' reshuffled its primary lifts: ' + [...picks].join(' vs '));
+  }
+  const across = new Set([...byBlock.values()].map(s => [...s][0]));
+  assert.ok(across.size > 1, 'primaries never rotated across ' + byBlock.size + ' blocks');
+});
+
+test('accessories still vary between days inside a block', () => {
+  const settings = settingsFor('garage', 'standard');
+  const byBlock = new Map();
+  for (const key of datesFrom('2026-01-01', Engine.BLOCK_DAYS * 3)) {
+    const plan = Engine.buildPlan(key, settings);
+    if (plan.focusId !== 'push') continue;
+    const acc = plan.main
+      .filter(m => !Engine.PRIMARY_SLOTS.has(m.slot))
+      .map(m => m.ex.id).join();
+    const b = Engine.blockFor(key);
+    if (!byBlock.has(b)) byBlock.set(b, new Set());
+    byBlock.get(b).add(acc);
+  }
+  const varied = [...byBlock.values()].some(s => s.size > 1);
+  assert.ok(varied, 'accessories were identical on every push day of every block');
+});
+
+/* ---------- short sessions ---------- */
+
+test('short sessions never cut the lead slot or the heavy work', () => {
+  for (const key of datesFrom('2026-01-01', 84)) {
+    const short = Engine.buildPlan(key, settingsFor('full', 'short'));
+    const std   = Engine.buildPlan(key, settingsFor('full', 'standard'));
+    const shortSlots = short.main.map(m => m.slot);
+    assert.strictEqual(shortSlots[0], std.main[0].slot,
+      key + ' short day changed its lead slot');
+    for (const m of std.main) {
+      if (!Engine.PRIMARY_SLOTS.has(m.slot)) continue;
+      assert.ok(shortSlots.includes(m.slot),
+        key + ' short day cut primary slot ' + m.slot);
+    }
+  }
+});
+
+test('slot indices are stable across session-length changes', () => {
+  // rec.sets and rerolls are keyed by item.index in storage; changing the
+  // session length mid-day must not shift logged work onto other exercises
+  for (const key of datesFrom('2026-01-01', 56)) {
+    const std = Engine.buildPlan(key, settingsFor('full', 'standard'));
+    const stdByIndex = new Map(std.main.map(m => [m.index, m.slot]));
+    for (const len of ['short', 'long']) {
+      const plan = Engine.buildPlan(key, settingsFor('full', len));
+      for (const m of plan.main) {
+        if (!stdByIndex.has(m.index)) continue; // long-mode extras extend past standard
+        assert.strictEqual(stdByIndex.get(m.index), m.slot,
+          `${key} ${len} index ${m.index} is ${m.slot} but ${stdByIndex.get(m.index)} in standard`);
+      }
+    }
+  }
+});
+
+test('short sessions rotate which extras are cut instead of always the tail', () => {
+  const seen = new Set();
+  for (const key of datesFrom('2026-01-01', 120)) {
+    const plan = Engine.buildPlan(key, settingsFor('full', 'short'));
+    if (plan.focusId !== 'push') continue;
+    plan.main.forEach(m => seen.add(m.slot));
+  }
+  assert.ok(seen.has('triceps'), 'triceps never made it into a short push day');
+  assert.ok(seen.has('push_acc'), 'push_acc never made it into a short push day');
+});
+
+/* ---------- focus-aware warm-ups & finishers ---------- */
+
+test('warm-ups lean toward the half of the body being trained', () => {
+  everyCombo((settings, eq) => {
+    for (const key of datesFrom('2026-01-01', 56)) {
+      const plan = Engine.buildPlan(key, settings);
+      const bias = Engine.FOCUS_BIAS[plan.focusId];
+      if (bias === 'full') continue;
+      const off = bias === 'upper' ? 'lower' : 'upper';
+      for (const w of plan.warm) {
+        assert.notStrictEqual(w.ex.bias, off,
+          `${eq} ${plan.focusId} day warmed up with "${w.ex.name}" (${w.ex.bias})`);
+      }
+    }
+  });
+});
+
+test('the finisher never hammers what the day already trained', () => {
+  everyCombo((settings, eq) => {
+    for (const key of datesFrom('2026-01-01', 56)) {
+      for (let roll = 0; roll < 4; roll++) {
+        const plan = Engine.buildPlan(key, settings, { finisherRoll: roll });
+        if (!plan.finisher) continue;
+        const avoid = Engine.FOCUS_AVOID[plan.focusId];
+        if (!avoid) continue;
+        assert.notStrictEqual(plan.finisher.stress, avoid,
+          `${eq} ${plan.focusId} day got finisher "${plan.finisher.name}" (${plan.finisher.stress})`);
+      }
+    }
+  });
+});
+
+/* ---------- ramp-up sets ---------- */
+
+test('ramp sets ascend through plate-rounded fractions of the work weight', () => {
+  assert.deepStrictEqual(Engine.rampSets(135, 'lb'),
+    [{ weight: 70, reps: 5 }, { weight: 100, reps: 3 }]);
+  assert.deepStrictEqual(Engine.rampSets(225, 'lb'),
+    [{ weight: 115, reps: 5 }, { weight: 170, reps: 3 }]);
+  assert.deepStrictEqual(Engine.rampSets(100, 'kg'),
+    [{ weight: 50, reps: 5 }, { weight: 75, reps: 3 }]);
+});
+
+test('trivial or junk loads produce no ramp', () => {
+  assert.deepStrictEqual(Engine.rampSets(10, 'lb'), []);
+  assert.deepStrictEqual(Engine.rampSets(0, 'lb'), []);
+  assert.deepStrictEqual(Engine.rampSets(-50, 'lb'), []);
+  assert.deepStrictEqual(Engine.rampSets('heavy', 'lb'), []);
+  assert.deepStrictEqual(Engine.rampSets(null, 'lb'), []);
+});
+
+test('ramp weights stay strictly below the working weight and ascend', () => {
+  for (let w = 15; w <= 500; w += 5) {
+    const ramp = Engine.rampSets(w, 'lb');
+    for (let i = 0; i < ramp.length; i++) {
+      assert.ok(ramp[i].weight < w, `ramp for ${w} reached the work weight`);
+      if (i) assert.ok(ramp[i].weight > ramp[i - 1].weight, `ramp for ${w} did not ascend`);
+    }
+  }
+});
+
+test('exactly the first heavy compound of a session is flagged for a ramp', () => {
+  const keys = datesFrom('2026-01-01', 60);
+  everyCombo((settings, eq, len) => {
+    for (const key of keys) {
+      const plan = Engine.buildPlan(key, settings);
+      const flagged = plan.main.filter(m => m.ramp);
+      const candidates = plan.main.filter(m =>
+        Engine.PRIMARY_SLOTS.has(m.slot) && m.ex.load && m.ex.type === 'compound');
+      if (candidates.length) {
+        assert.strictEqual(flagged.length, 1,
+          `${eq}/${len} ${key} flagged ${flagged.length} ramps`);
+        assert.strictEqual(flagged[0].ex.id, candidates[0].ex.id,
+          `${eq}/${len} ${key} ramp is not on the first heavy compound`);
+      } else {
+        assert.strictEqual(flagged.length, 0,
+          `${eq}/${len} ${key} flagged a ramp without a heavy compound`);
+      }
+    }
+  });
 });
 
 /* ---------- determinism ---------- */
@@ -483,6 +689,85 @@ test('repeated advancement climbs steadily rather than drifting', () => {
     weight = Engine.progression({ weight, reps: [8, 8, 8] }, range, 5).weight;
   }
   assert.strictEqual(weight, 185, '10 weeks of hitting the top should be +50 lb, exactly');
+});
+
+/* ---------- stalls & deloads ---------- */
+
+test('three stalled sessions at one load trigger a deload suggestion', () => {
+  const range = { lo: 6, hi: 8 };
+  const hist = [
+    { weight: 155, reps: [7, 7, 6] },
+    { weight: 155, reps: [8, 7, 7] },
+    { weight: 155, reps: [7, 6, 6] },
+    { weight: 150, reps: [8, 8, 8] },   // older, different load — must not count
+  ];
+  assert.strictEqual(Engine.countHolds(hist, range, 3), 3);
+  const p = Engine.progression(hist[0], range, 5, 3, 3);
+  assert.strictEqual(p.advance, false);
+  assert.strictEqual(p.reason, 'deload');
+  assert.strictEqual(p.deload, true);
+  assert.strictEqual(p.weight, 140, '155 minus ~10% should land on the 140 plate');
+});
+
+test('fewer stalls than the threshold just hold the load', () => {
+  const p = Engine.progression({ weight: 155, reps: [7, 7, 7] }, { lo: 6, hi: 8 }, 5, 3, 2);
+  assert.strictEqual(p.reason, 'hold');
+  assert.strictEqual(p.weight, 155);
+});
+
+test('a session that hits the top advances regardless of earlier stalls', () => {
+  const p = Engine.progression({ weight: 155, reps: [8, 8, 8] }, { lo: 6, hi: 8 }, 5, 3, 5);
+  assert.strictEqual(p.advance, true);
+  assert.strictEqual(p.weight, 160);
+});
+
+test('countHolds ends the streak on load changes, advances, and incomplete sessions', () => {
+  const range = { lo: 6, hi: 8 };
+  // load changed one session back
+  assert.strictEqual(Engine.countHolds([
+    { weight: 155, reps: [7, 7, 7] },
+    { weight: 150, reps: [7, 7, 7] },
+  ], range, 3), 1);
+  // an advance-worthy session interrupts the streak
+  assert.strictEqual(Engine.countHolds([
+    { weight: 155, reps: [7, 7, 7] },
+    { weight: 155, reps: [8, 8, 8] },
+    { weight: 155, reps: [7, 7, 7] },
+  ], range, 3), 1);
+  // an abandoned session is not evidence of a stall
+  assert.strictEqual(Engine.countHolds([
+    { weight: 155, reps: [7, 7, 7] },
+    { weight: 155, reps: [7] },
+    { weight: 155, reps: [7, 7, 7] },
+  ], range, 3), 1);
+  // junk in, zero out
+  assert.strictEqual(Engine.countHolds(null, range, 3), 0);
+  assert.strictEqual(Engine.countHolds([], range, 3), 0);
+  assert.strictEqual(Engine.countHolds([{ weight: 'heavy', reps: [7, 7, 7] }], range, 3), 0);
+  assert.strictEqual(Engine.countHolds([{ weight: 155, reps: [7, 7, 7] }], null, 3), 0);
+});
+
+test('a deload rounds to plate math and never drops below one step', () => {
+  const range = { lo: 6, hi: 8 };
+  const kg = Engine.progression({ weight: 60, reps: [7, 7, 7] }, range, 2.5, 3, 3);
+  assert.strictEqual(kg.weight, 55, '60 kg minus ~10% is 54, which loads as 55');
+  const tiny = Engine.progression({ weight: 5, reps: [7, 7, 7] }, range, 5, 3, 3);
+  assert.strictEqual(tiny.weight, 5, 'a deload must never suggest less than one step');
+});
+
+test('a deload always lands strictly below the stalled weight', () => {
+  const range = { lo: 6, hi: 8 };
+  // light loads: 10% is less than half a step, so naive rounding would climb
+  // straight back to the stalled weight and the deload would be a no-op
+  for (const w of [15, 20, 25, 40]) {
+    const p = Engine.progression({ weight: w, reps: [7, 7, 7] }, range, 5, 3, 3);
+    assert.ok(p.weight < w, `deload from ${w} lb suggested ${p.weight}, not a reduction`);
+    assert.ok(p.weight >= 5, `deload from ${w} lb dropped below one step`);
+  }
+  for (const w of [7.5, 10, 12.5]) {
+    const p = Engine.progression({ weight: w, reps: [7, 7, 7] }, range, 2.5, 3, 3);
+    assert.ok(p.weight < w, `deload from ${w} kg suggested ${p.weight}, not a reduction`);
+  }
 });
 
 /* ---------- maxes ---------- */
