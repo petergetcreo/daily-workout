@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0e1014">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Daily">
+<title>Daily Workout</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-main">
+    <div class="date" id="hdr-date">—</div>
+    <h1 class="focus" id="hdr-focus">—</h1>
+    <div class="blurb" id="hdr-blurb"></div>
+  </div>
+  <div class="streak" id="hdr-streak" title="Current streak">
+    <span class="streak-num">0</span>
+    <span class="streak-label">day<br>streak</span>
+  </div>
+</header>
+
+<main>
+  <!-- ============ TODAY ============ -->
+  <section id="view-today" class="view active">
+    <div class="progressbar"><div class="progressbar-fill" id="progress-fill"></div></div>
+
+    <div class="block">
+      <div class="block-head">
+        <h2>Warm-up</h2>
+        <span class="block-note">~4 min</span>
+      </div>
+      <ul class="warmup-list" id="warmup-list"></ul>
+    </div>
+
+    <div class="block">
+      <div class="block-head">
+        <h2>Main work</h2>
+        <span class="block-note" id="main-note"></span>
+      </div>
+      <div id="main-list"></div>
+    </div>
+
+    <div class="block" id="finisher-block">
+      <div class="block-head">
+        <h2>Finisher</h2>
+        <button class="mini-btn" id="reroll-finisher" aria-label="Swap finisher">&#8635;</button>
+      </div>
+      <div class="finisher" id="finisher"></div>
+    </div>
+
+    <button class="primary" id="finish-btn">Mark workout complete</button>
+    <button class="ghost" id="change-focus-btn">Not feeling it — change today's focus</button>
+    <div class="spacer"></div>
+  </section>
+
+  <!-- ============ HISTORY ============ -->
+  <section id="view-history" class="view">
+    <div class="stats-row">
+      <div class="stat"><span class="stat-num" id="stat-streak">0</span><span class="stat-label">streak</span></div>
+      <div class="stat"><span class="stat-num" id="stat-total">0</span><span class="stat-label">total</span></div>
+      <div class="stat"><span class="stat-num" id="stat-month">0</span><span class="stat-label">this month</span></div>
+    </div>
+
+    <div class="block">
+      <div class="block-head"><h2>Last 6 weeks</h2></div>
+      <div class="cal" id="cal"></div>
+    </div>
+
+    <div class="block">
+      <div class="block-head"><h2>Recent sessions</h2></div>
+      <ul class="log-list" id="log-list"></ul>
+    </div>
+
+    <div class="block">
+      <div class="block-head"><h2>Working weights</h2></div>
+      <ul class="log-list" id="weights-list"></ul>
+    </div>
+    <div class="spacer"></div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section id="view-settings" class="view">
+    <div class="block">
+      <div class="block-head"><h2>Session length</h2></div>
+      <div class="seg" id="seg-length">
+        <button data-val="short">Short<small>10–15 min</small></button>
+        <button data-val="standard">Standard<small>20–30 min</small></button>
+        <button data-val="long">Long<small>45–60 min</small></button>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="block-head"><h2>Equipment available</h2></div>
+      <p class="hint">Turn things off when you travel — the app reworks the plan around what is left.</p>
+      <div class="toggles" id="equip-toggles"></div>
+    </div>
+
+    <div class="block">
+      <div class="block-head"><h2>Units</h2></div>
+      <div class="seg" id="seg-units">
+        <button data-val="lb">Pounds</button>
+        <button data-val="kg">Kilograms</button>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="block-head"><h2>Data</h2></div>
+      <p class="hint">Everything lives on this device only. Nothing is uploaded anywhere.</p>
+      <button class="ghost" id="export-btn">Export my data</button>
+      <button class="ghost danger" id="reset-btn">Erase all data</button>
+    </div>
+    <div class="spacer"></div>
+  </section>
+</main>
+
+<nav class="tabbar">
+  <button data-view="today" class="active"><span class="ico">&#9679;</span>Today</button>
+  <button data-view="history"><span class="ico">&#9635;</span>History</button>
+  <button data-view="settings"><span class="ico">&#9881;</span>Settings</button>
+</nav>
+
+<!-- rest timer overlay -->
+<div class="rest" id="rest" hidden>
+  <div class="rest-card">
+    <div class="rest-label">Rest</div>
+    <div class="rest-time" id="rest-time">1:30</div>
+    <div class="rest-next" id="rest-next"></div>
+    <div class="rest-btns">
+      <button class="ghost" id="rest-add">+30s</button>
+      <button class="primary" id="rest-skip">Skip</button>
+    </div>
+  </div>
+</div>
+
+<!-- focus picker sheet -->
+<div class="sheet" id="focus-sheet" hidden>
+  <div class="sheet-card">
+    <h2>Today's focus</h2>
+    <div id="focus-options"></div>
+    <button class="ghost" id="focus-cancel">Cancel</button>
+  </div>
+</div>
+
+<script src="exercises.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
