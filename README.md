@@ -80,14 +80,48 @@ next time that lift comes up.
 ## Files
 
 ```
-index.html      structure
-style.css       all styling
-exercises.js    the exercise library, day rotation, set/rep schemes
-app.js          plan generation, rendering, storage, timer
-sw.js           service worker (offline caching)
-manifest.json   PWA metadata
-make-icons.py   regenerates icons/ using only the stdlib
+index.html            structure
+style.css             all styling
+exercises.js          the exercise library, day rotation, set/rep schemes
+engine.js             generation logic — pure, no DOM, no storage
+app.js                rendering, storage, timer, wiring
+test/engine.test.js   test suite for the engine
+sw.js                 service worker (offline caching)
+manifest.json         PWA metadata
+make-icons.py          regenerates icons/ using only the stdlib
+package.json          npm test / npm run serve
 ```
+
+### Why the engine is separate
+
+`engine.js` holds everything that decides *what you train*: the rotation, slot
+filling, equipment filtering, set/rep schemes, duration estimates, 1RM math. It
+touches no DOM and no `localStorage` — every function takes what it needs as an
+argument and returns a value.
+
+That buys two things. It can be tested headlessly in Node, and it is the piece
+that ports if this ever becomes a native iOS app, where the rendering layer
+gets rebuilt but the programming logic shouldn't have to be rewritten from
+scratch.
+
+`app.js` owns state and rendering, and calls into the engine. Keep that
+direction — the engine should never reach back into the UI.
+
+## Tests
+
+```sh
+npm test          # or: node --test test/engine.test.js
+```
+
+29 tests covering library integrity, the rotation, plan generation across five
+equipment setups × three session lengths × a full year of dates, determinism,
+reroll behaviour, local-vs-UTC date handling, and the 1RM math.
+
+The suite has been mutation-tested — deliberately breaking the primary-slot
+preference, the date handling, the Epley formula, reroll determinism, the
+finisher rule, or equipment filtering each makes it fail. If you edit
+`exercises.js`, the integrity and placement tests are the ones that will catch
+a mistyped slot or an unknown equipment code.
 
 ## Editing the library
 

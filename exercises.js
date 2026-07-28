@@ -162,3 +162,10 @@ const SCHEMES = {
 
 /* Rest between sets, in seconds. */
 const REST = { compound: 100, accessory: 70, iso: 50, core: 40, interval: 40, cardio: 60, mobility: 20 };
+
+/* Publish the library for both the browser and Node (used by the tests).
+   Top-level `const` in a classic script does not become a property of the
+   global object, so this has to be explicit. */
+const LIBRARY = { EXERCISES, FINISHERS, FOCI, FOCUS_ORDER, SCHEMES, REST };
+if (typeof module === 'object' && module.exports) module.exports = LIBRARY;
+else if (typeof self !== 'undefined') self.LIBRARY = LIBRARY;

@@ -1,0 +1,10 @@
+{
+  "name": "daily-workout",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Offline PWA that generates a daily workout from the equipment you actually have",
+  "scripts": {
+    "test": "node --test test/engine.test.js",
+    "serve": "python3 -m http.server 4321 --bind 127.0.0.1"
+  }
+}
