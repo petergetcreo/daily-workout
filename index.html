@@ -60,8 +60,38 @@
     <div class="spacer"></div>
   </section>
 
-  <!-- ============ HISTORY ============ -->
-  <section id="view-history" class="view">
+  <!-- ============ PROGRESS ============ -->
+  <section id="view-progress" class="view">
+
+    <div class="block">
+      <div class="block-head">
+        <h2>Body weight</h2>
+        <span class="block-note" id="bw-delta"></span>
+      </div>
+      <div class="bw-card">
+        <div class="bw-top">
+          <div class="bw-nowrap">
+            <span class="bw-now" id="bw-now">—</span>
+            <span class="bw-unit" id="bw-unit">lb</span>
+          </div>
+          <div class="bw-meta" id="bw-meta">No entries yet</div>
+        </div>
+        <svg class="spark" id="bw-spark" viewBox="0 0 300 62" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <div class="bw-entry">
+          <input type="number" inputmode="decimal" step="0.1" id="bw-input" placeholder="Today's weight" aria-label="Today's body weight">
+          <button id="bw-log">Log</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="block-head">
+        <h2>Maxes</h2>
+        <button class="mini-btn" id="max-add" aria-label="Add a max">+</button>
+      </div>
+      <ul class="log-list" id="max-list"></ul>
+    </div>
+
     <div class="stats-row">
       <div class="stat"><span class="stat-num" id="stat-streak">0</span><span class="stat-label">streak</span></div>
       <div class="stat"><span class="stat-num" id="stat-total">0</span><span class="stat-label">total</span></div>
@@ -79,7 +109,7 @@
     </div>
 
     <div class="block">
-      <div class="block-head"><h2>Working weights</h2></div>
+      <div class="block-head"><h2>Last working weights</h2></div>
       <ul class="log-list" id="weights-list"></ul>
     </div>
     <div class="spacer"></div>
@@ -104,6 +134,7 @@
 
     <div class="block">
       <div class="block-head"><h2>Units</h2></div>
+      <p class="hint">Changes the label only — numbers you already logged are not converted.</p>
       <div class="seg" id="seg-units">
         <button data-val="lb">Pounds</button>
         <button data-val="kg">Kilograms</button>
@@ -122,7 +153,7 @@
 
 <nav class="tabbar">
   <button data-view="today" class="active"><span class="ico">&#9679;</span>Today</button>
-  <button data-view="history"><span class="ico">&#9635;</span>History</button>
+  <button data-view="progress"><span class="ico">&#9635;</span>Progress</button>
   <button data-view="settings"><span class="ico">&#9881;</span>Settings</button>
 </nav>
 
@@ -145,6 +176,34 @@
     <h2>Today's focus</h2>
     <div id="focus-options"></div>
     <button class="ghost" id="focus-cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- max editor -->
+<div class="sheet" id="max-sheet" hidden>
+  <div class="sheet-card">
+    <h2 id="max-sheet-title">Max</h2>
+    <div class="max-fields">
+      <label>Weight
+        <input type="number" inputmode="decimal" step="0.5" id="max-weight">
+      </label>
+      <label>Reps
+        <input type="number" inputmode="numeric" step="1" min="1" id="max-reps" value="1">
+      </label>
+    </div>
+    <div class="max-e1rm" id="max-e1rm"></div>
+    <button class="primary" id="max-save">Save</button>
+    <button class="ghost" id="max-clear">Clear this max</button>
+    <button class="ghost" id="max-cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- lift picker -->
+<div class="sheet" id="lift-sheet" hidden>
+  <div class="sheet-card">
+    <h2>Pick a lift</h2>
+    <div id="lift-options" class="lift-options"></div>
+    <button class="ghost" id="lift-cancel">Cancel</button>
   </div>
 </div>
 

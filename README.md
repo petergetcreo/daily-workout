@@ -37,6 +37,34 @@ Two rules keep the output sensible:
 Session length rescales sets, reps, and slot count: Short ≈ 15–25 min,
 Standard ≈ 21–30 min, Long ≈ 41–52 min.
 
+## Tracking
+
+**Body weight** (Progress tab) — one entry per day, logged in whatever unit is
+set in Settings. Shows the latest number, the change against the entry nearest
+30 days back, and a 90-day sparkline drawn as inline SVG. Logging again on the
+same day overwrites; submitting an empty field deletes that day's entry.
+
+**Maxes** (Progress tab) — a recorded best for each *applicable lift*, which
+means the 21 loaded compound movements (bench, squat, OHP, rows, RDLs, and so
+on). Curls, lateral raises, and calf raises are deliberately excluded, since a
+"max" there is not a useful number.
+
+Each max stores weight, reps, and date, and displays an Epley estimated 1RM
+(`w × (1 + reps/30)`) when reps > 1. Above 12 reps the estimate stops being
+shown, because Epley drifts badly out there. Add one with **＋**, or tap any
+row to edit or clear it.
+
+During a session, if the weight you log on an applicable lift is *higher* than
+that lift's recorded max, a **PR?** chip appears on the card. Tapping it opens
+the max editor pre-filled with that weight and the prescribed rep target, so
+banking a PR is two taps. Equalling your max does not trigger it — only beating
+it does.
+
+Note that a max and a *last working weight* are different things and the app
+tracks both: the max is your best ever, the working weight is simply what you
+loaded most recently, and it appears as the placeholder in the weight field
+next time that lift comes up.
+
 ## Using it
 
 - Tap a set number to log it — that starts the rest timer automatically, sized
@@ -101,6 +129,16 @@ but iOS blocks service workers on insecure origins, so it will not work offline.
 
 ## Data
 
-Everything is in `localStorage` on the device — nothing leaves the phone.
+Everything is in `localStorage` on the device — nothing leaves the phone. Keys:
+`dw.settings`, `dw.log` (per-day sets and completion), `dw.weights` (last
+working weight per lift), `dw.overrides` (focus changes and swaps),
+`dw.body` (body weight), `dw.maxes`.
+
+All dates are keyed to your **local** calendar day, not UTC, so a late-night
+weigh-in files under the day you were actually living in.
+
+Switching lb/kg relabels the display but does **not** convert numbers you
+already logged.
+
 Settings → Export writes a JSON backup. Settings → Erase clears it all.
 Because it is per-origin storage, moving to a different URL starts fresh.

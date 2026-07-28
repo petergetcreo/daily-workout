@@ -10,6 +10,8 @@ const KEY = {
   log:      'dw.log',       // { "2026-07-27": { focus, complete, sets:{i:n}, warm:{i:true}, weights:{exId:val} } }
   weights:  'dw.weights',   // { exId: "135" }  most recent working weight
   overrides:'dw.overrides', // { "2026-07-27": { focus, rerolls:{i:n}, finisherRoll:n } }
+  body:     'dw.body',      // { "2026-07-27": 182.4 }  body weight log
+  maxes:    'dw.maxes',     // { exId: { weight: 225, reps: 3, date: "2026-07-27" } }
 };
 
 const DEFAULT_SETTINGS = {
@@ -35,6 +37,8 @@ settings.equip = Object.assign(structuredClone(DEFAULT_SETTINGS.equip), settings
 let logs      = load(KEY.log, {});
 let weights   = load(KEY.weights, {});
 let overrides = load(KEY.overrides, {});
+let body      = load(KEY.body, {});
+let maxes     = load(KEY.maxes, {});
 
 /* ======================= dates & randomness ======================= */
 
@@ -199,7 +203,31 @@ function record(key) {
   r.sets = r.sets || {}; r.warm = r.warm || {}; r.weights = r.weights || {};
   return r;
 }
-function persist() { save(KEY.log, logs); save(KEY.weights, weights); save(KEY.overrides, overrides); }
+function persist() {
+  save(KEY.log, logs);
+  save(KEY.weights, weights);
+  save(KEY.overrides, overrides);
+  save(KEY.body, body);
+  save(KEY.maxes, maxes);
+}
+
+/* ======================= maxes ======================= */
+
+/* "Applicable lifts" — the loaded compound movements where a max is a
+   meaningful number. Curls and lateral raises are deliberately excluded. */
+const MAXABLE = EXERCISES.filter(e => e.load && e.type === 'compound');
+const MAXABLE_IDS = new Set(MAXABLE.map(e => e.id));
+
+/* Epley. Only an estimate, and it drifts badly above ~10 reps, so we
+   do not show it there. */
+function e1rm(weight, reps) {
+  const w = parseFloat(weight), r = parseInt(reps, 10);
+  if (!w || !r || r < 1) return null;
+  if (r === 1) return Math.round(w);
+  if (r > 12) return null;
+  return Math.round(w * (1 + r / 30));
+}
+function exById(id) { return EXERCISES.find(e => e.id === id); }
 
 /* ======================= rendering ======================= */
 
@@ -302,12 +330,27 @@ function renderToday() {
         if (v) { rec.weights[item.ex.id] = v; weights[item.ex.id] = v; }
         else { delete rec.weights[item.ex.id]; }
         persist();
+        renderToday(); // may surface or clear the PR chip
       };
       w.appendChild(input);
       const u = document.createElement('span');
       u.textContent = settings.units;
       w.appendChild(u);
       bottom.appendChild(w);
+
+      /* If today's load beats the lift's recorded max, offer to bank it. */
+      if (MAXABLE_IDS.has(item.ex.id)) {
+        const todayW = parseFloat(rec.weights[item.ex.id]);
+        const best = maxes[item.ex.id] ? parseFloat(maxes[item.ex.id].weight) : 0;
+        if (todayW > best) {
+          const chip = document.createElement('button');
+          chip.className = 'pr-chip';
+          chip.textContent = 'PR?';
+          chip.title = 'Record this as a new max';
+          chip.onclick = () => openMaxSheet(item.ex.id, todayW, parseInt(item.reps, 10) || 1);
+          bottom.appendChild(chip);
+        }
+      }
     }
 
     card.appendChild(bottom);
@@ -355,7 +398,196 @@ function streak() {
   return n;
 }
 
+/* ======================= body weight ======================= */
+
+function bodyEntries() {
+  return Object.entries(body)
+    .filter(([, v]) => typeof v === 'number' && isFinite(v))
+    .sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+function renderBodyweight() {
+  const entries = bodyEntries();
+  const unit = settings.units;
+  $('bw-unit').textContent = unit;
+
+  const input = $('bw-input');
+  if (document.activeElement !== input) {
+    input.value = body[today()] != null ? body[today()] : '';
+  }
+
+  if (!entries.length) {
+    $('bw-now').textContent = '—';
+    $('bw-meta').textContent = 'No entries yet';
+    $('bw-delta').textContent = '';
+    drawSpark([]);
+    return;
+  }
+
+  const [lastKey, lastVal] = entries[entries.length - 1];
+  $('bw-now').textContent = lastVal;
+  $('bw-meta').textContent = lastKey === today()
+    ? 'logged today'
+    : 'as of ' + keyToDate(lastKey).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+  /* change vs the entry nearest to 30 days before the latest one */
+  const target = dayNumber(lastKey) - 30;
+  let ref = null, refGap = Infinity;
+  for (const [k, v] of entries) {
+    if (k === lastKey) continue;
+    const gap = Math.abs(dayNumber(k) - target);
+    if (gap < refGap) { refGap = gap; ref = [k, v]; }
+  }
+  if (ref && refGap <= 21) {
+    const diff = lastVal - ref[1];
+    const span = dayNumber(lastKey) - dayNumber(ref[0]);
+    const sign = diff > 0 ? '+' : diff < 0 ? '−' : '±';
+    $('bw-delta').textContent =
+      sign + Math.abs(diff).toFixed(1) + ' ' + unit + ' in ' + span + ' days';
+  } else {
+    $('bw-delta').textContent = entries.length + ' entr' + (entries.length === 1 ? 'y' : 'ies');
+  }
+
+  drawSpark(entries);
+}
+
+/* 90-day sparkline, drawn as inline SVG so there is no charting library. */
+function drawSpark(entries) {
+  const svg = $('bw-spark');
+  const cutoff = dayNumber(today()) - 90;
+  const pts = entries.filter(([k]) => dayNumber(k) >= cutoff);
+
+  if (pts.length < 2) {
+    svg.innerHTML = '';
+    svg.style.display = 'none';
+    let note = svg.nextElementSibling;
+    if (!note || !note.classList.contains('spark-empty')) {
+      note = document.createElement('div');
+      note.className = 'spark-empty';
+      svg.after(note);
+    }
+    note.textContent = pts.length
+      ? 'Log a second weigh-in to see the trend.'
+      : 'Log your weight below to start tracking.';
+    note.hidden = false;
+    return;
+  }
+  svg.style.display = 'block';
+  const note = svg.nextElementSibling;
+  if (note && note.classList.contains('spark-empty')) note.hidden = true;
+
+  const W = 300, H = 62, PAD = 6;
+  const xs = pts.map(([k]) => dayNumber(k));
+  const ys = pts.map(([, v]) => v);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const spanX = (x1 - x0) || 1;
+  const spanY = (y1 - y0) || 1;   // a flat line sits mid-height
+  const px = x => ((x - x0) / spanX) * W;
+  const py = y => H - PAD - ((y - y0) / spanY) * (H - PAD * 2);
+
+  const coords = pts.map(([k, v]) => [px(dayNumber(k)), py(v)]);
+  const line = coords.map(([x, y], i) => (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1)).join(' ');
+  const area = line + ' L' + W + ' ' + H + ' L0 ' + H + ' Z';
+  const last = coords[coords.length - 1];
+
+  svg.innerHTML =
+    '<path class="sp-area" d="' + area + '"/>' +
+    '<path class="sp-line" d="' + line + '"/>' +
+    '<circle class="sp-dot" cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="3.5"/>';
+}
+
+function logBodyweight() {
+  const input = $('bw-input');
+  const raw = input.value.trim();
+  const k = today();
+  if (!raw) { delete body[k]; }
+  else {
+    const v = parseFloat(raw);
+    if (!isFinite(v) || v <= 0) return;
+    body[k] = Math.round(v * 10) / 10;
+  }
+  persist();
+  input.blur();
+  renderBodyweight();
+}
+
+/* ======================= maxes ======================= */
+
+function renderMaxes() {
+  const list = $('max-list');
+  list.innerHTML = '';
+  const rows = Object.entries(maxes)
+    .map(([id, m]) => [exById(id), m])
+    .filter(([e]) => e)
+    .sort((a, b) => a[0].name.localeCompare(b[0].name));
+
+  if (!rows.length) {
+    list.innerHTML = '<li class="empty">No maxes yet. Tap ＋ to add one, or hit “PR?” on a lift during a session.</li>';
+    return;
+  }
+  for (const [ex, m] of rows) {
+    const est = e1rm(m.weight, m.reps);
+    const li = document.createElement('li');
+    li.className = 'tappable';
+    li.innerHTML =
+      '<span class="max-main">' +
+        '<span class="max-name">' + esc(ex.name) + '</span>' +
+        '<span class="max-sub">' + esc(m.reps) + ' rep' + (m.reps == 1 ? '' : 's') +
+          (m.date ? ' · ' + keyToDate(m.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '') +
+        '</span>' +
+      '</span>' +
+      '<span class="max-val">' +
+        '<span class="max-weight">' + esc(m.weight) + ' ' + settings.units + '</span>' +
+        (est && m.reps > 1 ? '<span class="max-1rm">~' + est + ' est. 1RM</span>' : '') +
+      '</span>';
+    li.onclick = () => openMaxSheet(ex.id);
+    list.appendChild(li);
+  }
+}
+
+let maxSheetId = null;
+
+function openMaxSheet(exId, presetWeight, presetReps) {
+  const ex = exById(exId);
+  if (!ex) return;
+  maxSheetId = exId;
+  $('max-sheet-title').textContent = ex.name;
+  const existing = maxes[exId];
+  $('max-weight').value = presetWeight != null ? presetWeight : (existing ? existing.weight : '');
+  $('max-reps').value   = presetReps   != null ? presetReps   : (existing ? existing.reps : 1);
+  $('max-clear').hidden = !existing;
+  updateMaxEstimate();
+  $('lift-sheet').hidden = true;
+  $('max-sheet').hidden = false;
+}
+
+function updateMaxEstimate() {
+  const w = $('max-weight').value, r = $('max-reps').value;
+  const est = e1rm(w, r);
+  $('max-e1rm').textContent = (est && parseInt(r, 10) > 1)
+    ? 'Estimated 1RM: ' + est + ' ' + settings.units
+    : (parseInt(r, 10) > 12 ? 'Above 12 reps the 1RM estimate is not reliable.' : '');
+}
+
+function openLiftPicker() {
+  const box = $('lift-options');
+  box.innerHTML = '';
+  MAXABLE.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach(ex => {
+    const b = document.createElement('button');
+    b.className = 'focus-opt' + (maxes[ex.id] ? ' on' : '');
+    b.innerHTML = '<span>' + esc(ex.name) +
+      (maxes[ex.id] ? '<small>' + esc(maxes[ex.id].weight) + ' ' + settings.units +
+        ' × ' + esc(maxes[ex.id].reps) + '</small>' : '') + '</span>';
+    b.onclick = () => openMaxSheet(ex.id);
+    box.appendChild(b);
+  });
+  $('lift-sheet').hidden = false;
+}
+
 function renderHistory() {
+  renderBodyweight();
+  renderMaxes();
   const done = Object.entries(logs).filter(([, v]) => v.complete);
   $('stat-streak').textContent = streak();
   $('stat-total').textContent = done.length;
@@ -552,7 +784,7 @@ document.querySelectorAll('.tabbar button').forEach(b => {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     b.classList.add('active');
     $('view-' + b.dataset.view).classList.add('active');
-    if (b.dataset.view === 'history') renderHistory();
+    if (b.dataset.view === 'progress') renderHistory();
     if (b.dataset.view === 'settings') renderSettings();
     window.scrollTo(0, 0);
   };
@@ -584,6 +816,39 @@ $('reroll-finisher').onclick = () => {
 $('rest-skip').onclick = stopRest;
 $('rest-add').onclick = () => { restLeft += 30; paintRest(); };
 
+/* body weight */
+$('bw-log').onclick = logBodyweight;
+$('bw-input').addEventListener('keydown', e => { if (e.key === 'Enter') logBodyweight(); });
+
+/* maxes */
+$('max-add').onclick = openLiftPicker;
+$('lift-cancel').onclick = () => { $('lift-sheet').hidden = true; };
+$('lift-sheet').onclick = e => { if (e.target.id === 'lift-sheet') $('lift-sheet').hidden = true; };
+$('max-cancel').onclick = () => { $('max-sheet').hidden = true; };
+$('max-sheet').onclick = e => { if (e.target.id === 'max-sheet') $('max-sheet').hidden = true; };
+$('max-weight').oninput = updateMaxEstimate;
+$('max-reps').oninput = updateMaxEstimate;
+
+$('max-save').onclick = () => {
+  const w = parseFloat($('max-weight').value);
+  const r = parseInt($('max-reps').value, 10);
+  if (!maxSheetId || !isFinite(w) || w <= 0 || !isFinite(r) || r < 1) return;
+  maxes[maxSheetId] = { weight: Math.round(w * 10) / 10, reps: r, date: today() };
+  persist();
+  $('max-sheet').hidden = true;
+  renderMaxes();
+  renderToday();   // clears the PR chip now that the max is banked
+  if (navigator.vibrate) navigator.vibrate(30);
+};
+
+$('max-clear').onclick = () => {
+  if (maxSheetId) delete maxes[maxSheetId];
+  persist();
+  $('max-sheet').hidden = true;
+  renderMaxes();
+  renderToday();
+};
+
 document.querySelectorAll('#seg-length button').forEach(b => {
   b.onclick = () => {
     settings.length = b.dataset.val;
@@ -602,7 +867,7 @@ document.querySelectorAll('#seg-units button').forEach(b => {
 });
 
 $('export-btn').onclick = () => {
-  const blob = new Blob([JSON.stringify({ settings, logs, weights, overrides }, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ settings, logs, weights, overrides, body, maxes }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'daily-workout-' + today() + '.json';

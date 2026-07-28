@@ -1,5 +1,5 @@
 /* Cache-first service worker. Bump CACHE when you change any asset. */
-const CACHE = 'daily-workout-v1';
+const CACHE = 'daily-workout-v2';
 const ASSETS = [
   './',
   './index.html',
