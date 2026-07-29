@@ -7,7 +7,10 @@
 
 const KEY = {
   settings: 'dw.settings',
-  log:      'dw.log',       // { "2026-07-27": { focus, complete, sets:{i:n}, warm:{i:true}, weights:{exId:val} } }
+  log:      'dw.log',       // { "2026-07-27": { focus, complete, sets:{exId:n}, warm:{i:true}, weights:{exId:val} } }
+                            //   sets are keyed by EXERCISE ID, never slot index: goal pinning and
+                            //   short-mode trims can change which exercise sits at an index mid-day,
+                            //   and logged work must stay with the movement that did it
   weights:  'dw.weights',   // { exId: "135" }  most recent working weight
   overrides:'dw.overrides', // { "2026-07-27": { focus, rerolls:{i:n}, finisherRoll:n } }
   body:     'dw.body',      // { "2026-07-27": 182.4 }  body weight log
@@ -182,11 +185,11 @@ function logSet(item, s, doneSets, range, rec, key) {
   const t = range ? targetFor(item, key) : null;
 
   if (!range) {
-    rec.sets[item.index] = wasDone && doneSets === s ? s - 1 : s;
-    // timed work keeps an id-keyed record too, so it has a history that
+    rec.sets[item.ex.id] = wasDone && doneSets === s ? s - 1 : s;
+    // timed work keeps a completion record too, so it has a history that
     // survives plan changes — that is what duration progression reads
     rec.timed = rec.timed || {};
-    const done = rec.sets[item.index] || 0;
+    const done = rec.sets[item.ex.id] || 0;
     if (done > 0) rec.timed[item.ex.id] = { done, of: item.sets };
     else delete rec.timed[item.ex.id];
   } else if (!wasDone) {
@@ -199,11 +202,11 @@ function logSet(item, s, doneSets, range, rec, key) {
     for (let i = doneSets; i < s; i++) {
       if (reps[i] == null) reps[i] = Math.min(range.hi, Math.max(range.lo, fallback));
     }
-    rec.sets[item.index] = s;
+    rec.sets[item.ex.id] = s;
   } else {
     const next = (reps[s - 1] || range.hi) - 1;
     if (next < range.lo) {
-      rec.sets[item.index] = s - 1;
+      rec.sets[item.ex.id] = s - 1;
       reps.length = Math.max(0, s - 1);
     } else {
       reps[s - 1] = next;
@@ -211,7 +214,7 @@ function logSet(item, s, doneSets, range, rec, key) {
   }
 
   if (range) {
-    reps.length = Math.min(reps.length, rec.sets[item.index] || 0);
+    reps.length = Math.min(reps.length, rec.sets[item.ex.id] || 0);
     if (reps.length) rec.reps[item.ex.id] = reps;
     else delete rec.reps[item.ex.id];
   }
@@ -228,7 +231,7 @@ function logSet(item, s, doneSets, range, rec, key) {
     }
   }
 
-  const nowDone = rec.sets[item.index] || 0;
+  const nowDone = rec.sets[item.ex.id] || 0;
   persist();
   checkGoals();
   renderToday();
@@ -281,7 +284,7 @@ function renderToday() {
   const ml = $('main-list');
   ml.innerHTML = '';
   plan.main.forEach(item => {
-    const doneSets = rec.sets[item.index] || 0;
+    const doneSets = rec.sets[item.ex.id] || 0;
     const card = document.createElement('div');
     card.className = 'ex' + (doneSets >= item.sets ? ' complete' : '');
 
@@ -311,8 +314,9 @@ function renderToday() {
     swap.onclick = () => {
       const ov = overrides[key] || (overrides[key] = {});
       ov.rerolls = ov.rerolls || {};
+      // rerolls stay index-keyed on purpose: they mean "reroll this SLOT"
       ov.rerolls[item.index] = (ov.rerolls[item.index] || 0) + 1;
-      delete rec.sets[item.index];
+      delete rec.sets[item.ex.id];
       if (rec.reps) delete rec.reps[item.ex.id];
       persist();
       renderToday();
@@ -473,7 +477,7 @@ function renderToday() {
 
   /* progress + finish button */
   const totalSets = plan.main.reduce((a, m) => a + m.sets, 0) + plan.warm.length;
-  const doneAll = plan.main.reduce((a, m) => a + Math.min(rec.sets[m.index] || 0, m.sets), 0) +
+  const doneAll = plan.main.reduce((a, m) => a + Math.min(rec.sets[m.ex.id] || 0, m.sets), 0) +
                   plan.warm.filter((_, i) => rec.warm[i]).length;
   $('progress-fill').style.width = (totalSets ? (doneAll / totalSets) * 100 : 0) + '%';
 
@@ -1340,6 +1344,7 @@ let pendingUnits = null;
 
 function countLoggedWeights() {
   let n = Object.keys(weights).length + Object.keys(maxes).length + Object.keys(body).length;
+  n += Object.values(goals).filter(g => g && g.type === 'load').length;
   for (const r of Object.values(logs)) n += Object.keys((r && r.weights) || {}).length;
   return n;
 }
@@ -1362,6 +1367,11 @@ function convertAllWeights(to) {
   }
   for (const m of Object.values(maxes)) m.weight = lift(m.weight);
   for (const k of Object.keys(body)) body[k] = bw(body[k]);
+  // load-goal targets are weights too — a 250 lb bench goal must not
+  // silently become a 250 kg one. Rep goals carry no unit.
+  for (const g of Object.values(goals)) {
+    if (g && g.type === 'load') g.target = lift(g.target);
+  }
 }
 
 function applyUnits(to, convert) {
