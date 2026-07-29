@@ -440,6 +440,12 @@ button { font-family: inherit; cursor: pointer; }
 /* past-day sheet list can get long */
 #day-sheet-list { max-height: 45vh; overflow-y: auto; margin-bottom: 4px; }
 
+/* first-open setup sheet */
+.setup-card { max-height: calc(100dvh - 40px); overflow-y: auto; }
+.setup-card .field { background: var(--surface-2); }
+.setup-card .setup-equip-hint { margin-top: 16px; }
+.setup-card .toggles { background: var(--surface-2); }
+
 /* profile fields */
 .field {
   display: flex;

@@ -190,8 +190,10 @@ trained lifts that have at least two logged sessions.
   break yesterday's streak until the day rolls over.
 - Tap any day in the Progress calendar to see what that day actually recorded
   — lifts, loads, reps, and the body weight entry, read-only.
-- A one-time first-run card explains the tap-to-log gesture and points new
-  users at equipment setup before their first session.
+- On first open, a one-time setup sheet collects the profile (name, age,
+  experience) and equipment before the first workout — skippable, everything
+  editable later in Settings. A separate one-time card on Today explains the
+  tap-to-log gesture.
 
 ## Files
 

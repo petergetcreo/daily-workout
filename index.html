@@ -32,16 +32,14 @@
     <div class="progressbar"><div class="progressbar-fill" id="progress-fill"></div></div>
 
     <div class="block onboard" id="onboard" hidden>
-      <div class="block-head"><h2>First time? Two things</h2></div>
+      <div class="block-head"><h2>How logging works</h2></div>
       <p class="hint"><strong>Tap a set number to log it</strong> — one tap
         means you hit the target reps. Came up short? Tap it again to count
         down one rep at a time. The <strong>&#8635;</strong> button swaps any
-        exercise for another that fits the day.</p>
-      <p class="hint">And tell the app what equipment you own — every workout
-        is built around exactly what is switched on.</p>
+        exercise for another that fits the day. Profile and equipment can be
+        changed any time in Settings.</p>
       <div class="onboard-btns">
-        <button class="primary" id="onboard-equip">Set my equipment</button>
-        <button class="ghost" id="onboard-done">Got it</button>
+        <button class="primary" id="onboard-done">Got it</button>
       </div>
     </div>
 
@@ -265,6 +263,31 @@
     <button class="primary" id="import-replace">Replace everything on this device</button>
     <button class="ghost" id="import-merge">Merge — this device wins conflicts</button>
     <button class="ghost" id="import-cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- first-open setup -->
+<div class="sheet" id="setup-sheet" hidden>
+  <div class="sheet-card setup-card">
+    <h2>Make it yours</h2>
+    <p class="hint">Everything stays on this device — no account, no upload.
+      All of it can be changed later in Settings.</p>
+    <label class="field">Name
+      <input type="text" id="setup-name" autocomplete="off" maxlength="30" placeholder="optional">
+    </label>
+    <label class="field">Age
+      <input type="number" id="setup-age" inputmode="numeric" min="10" max="100" placeholder="optional">
+    </label>
+    <div class="seg" id="setup-exp">
+      <button data-val="new">New to it<small>4-week blocks</small></button>
+      <button data-val="regular">Regular<small>3-week blocks</small></button>
+      <button data-val="seasoned">Seasoned<small>2-week blocks</small></button>
+    </div>
+    <p class="hint setup-equip-hint">What do you have to train with? Workouts
+      are built around exactly what is switched on.</p>
+    <div class="toggles" id="setup-equip"></div>
+    <button class="primary" id="setup-save">Start training</button>
+    <button class="ghost" id="setup-skip">Skip — use the defaults</button>
   </div>
 </div>
 

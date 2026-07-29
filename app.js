@@ -13,7 +13,8 @@ const KEY = {
   body:     'dw.body',      // { "2026-07-27": 182.4 }  body weight log
   maxes:    'dw.maxes',     // { exId: { weight: 225, reps: 3, date: "2026-07-27" } }
   goals:    'dw.goals',     // { exId: { type: 'load'|'reps', target: 250, set: date, achieved: date|null } }
-  onboard:  'dw.onboarded', // true once the first-run card is dismissed
+  onboard:  'dw.onboarded', // true once the how-logging-works card is dismissed
+  setup:    'dw.setup',     // true once the first-open setup sheet is closed
 };
 
 const DEFAULT_SETTINGS = {
@@ -1109,7 +1110,12 @@ function renderSettings() {
   document.querySelectorAll('#seg-units button').forEach(b =>
     b.classList.toggle('on', b.dataset.val === settings.units));
 
-  const box = $('equip-toggles');
+  buildEquipToggles($('equip-toggles'));
+}
+
+/* Equipment toggles render into the Settings page and into the first-open
+   setup sheet from the same code, so they can never drift apart. */
+function buildEquipToggles(box) {
   box.innerHTML = '';
   EQUIP_LABELS.forEach(([code, name, sub]) => {
     const label = document.createElement('label');
@@ -1121,7 +1127,7 @@ function renderSettings() {
       // never let every option be off
       if (!Object.values(settings.equip).some(Boolean)) {
         settings.equip.bw = true;
-        renderSettings();
+        buildEquipToggles(box);
       }
       save(KEY.settings, settings);
       renderToday();
@@ -1461,16 +1467,47 @@ $('day-cancel').onclick = () => { $('day-sheet').hidden = true; };
 $('day-sheet').onclick = e => { if (e.target.id === 'day-sheet') $('day-sheet').hidden = true; };
 
 /* first-run card */
-function dismissOnboard() {
+$('onboard-done').onclick = () => {
   save(KEY.onboard, true);
   $('onboard').hidden = true;
-}
-$('onboard-done').onclick = dismissOnboard;
-$('onboard-equip').onclick = () => {
-  dismissOnboard();
-  document.querySelector('.tabbar button[data-view="settings"]').click();
 };
 $('onboard').hidden = !!load(KEY.onboard, false);
+
+/* first-open setup sheet: profile + equipment, shown once. The seg and the
+   toggles write straight into settings; Start banks the typed fields too. */
+function renderSetupExp() {
+  document.querySelectorAll('#setup-exp button').forEach(b =>
+    b.classList.toggle('on', b.dataset.val === (settings.profile.experience || 'regular')));
+}
+function closeSetup(applyFields) {
+  if (applyFields) {
+    settings.profile.name = $('setup-name').value.trim().slice(0, 30);
+    const v = parseInt($('setup-age').value, 10);
+    settings.profile.age = (Number.isFinite(v) && v >= 10 && v <= 100) ? v : null;
+    save(KEY.settings, settings);
+  }
+  save(KEY.setup, true);
+  $('setup-sheet').hidden = true;
+  renderSettings();
+  renderToday();
+  if (applyFields && navigator.vibrate) navigator.vibrate(30);
+}
+document.querySelectorAll('#setup-exp button').forEach(b => {
+  b.onclick = () => {
+    settings.profile.experience = b.dataset.val;
+    save(KEY.settings, settings);
+    renderSetupExp();
+  };
+});
+$('setup-save').onclick = () => closeSetup(true);
+$('setup-skip').onclick = () => closeSetup(false);
+if (!load(KEY.setup, false)) {
+  buildEquipToggles($('setup-equip'));
+  renderSetupExp();
+  $('setup-name').value = settings.profile.name || '';
+  $('setup-age').value = settings.profile.age != null ? settings.profile.age : '';
+  $('setup-sheet').hidden = false;
+}
 
 $('export-btn').onclick = () => {
   const blob = new Blob([JSON.stringify({ settings, logs, weights, overrides, body, maxes, goals }, null, 2)], { type: 'application/json' });
