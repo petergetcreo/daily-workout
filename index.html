@@ -100,6 +100,14 @@
 
     <div class="block">
       <div class="block-head">
+        <h2>Goals</h2>
+        <button class="mini-btn" id="goal-add" aria-label="Add a goal">+</button>
+      </div>
+      <ul class="log-list" id="goal-list"></ul>
+    </div>
+
+    <div class="block">
+      <div class="block-head">
         <h2>Maxes</h2>
         <button class="mini-btn" id="max-add" aria-label="Add a max">+</button>
       </div>
@@ -239,6 +247,32 @@
     <button class="primary" id="import-replace">Replace everything on this device</button>
     <button class="ghost" id="import-merge">Merge — this device wins conflicts</button>
     <button class="ghost" id="import-cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- goal picker -->
+<div class="sheet" id="goal-pick-sheet" hidden>
+  <div class="sheet-card">
+    <h2>What are you chasing?</h2>
+    <p class="hint" id="goal-pick-hint"></p>
+    <div id="goal-pick-options" class="lift-options"></div>
+    <button class="ghost" id="goal-pick-cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- goal editor -->
+<div class="sheet" id="goal-sheet" hidden>
+  <div class="sheet-card">
+    <h2 id="goal-sheet-title">Goal</h2>
+    <p class="hint" id="goal-current"></p>
+    <div class="max-fields">
+      <label id="goal-target-label">Target
+        <input type="number" inputmode="decimal" min="1" id="goal-target">
+      </label>
+    </div>
+    <button class="primary" id="goal-save">Save goal</button>
+    <button class="ghost" id="goal-delete">Remove goal</button>
+    <button class="ghost" id="goal-cancel">Cancel</button>
   </div>
 </div>
 

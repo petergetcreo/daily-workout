@@ -440,6 +440,54 @@ button { font-family: inherit; cursor: pointer; }
 /* past-day sheet list can get long */
 #day-sheet-list { max-height: 45vh; overflow-y: auto; margin-bottom: 4px; }
 
+/* goals */
+.goal-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(255,122,47,.12);
+  border-radius: 6px;
+  padding: 1px 6px;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+.goal-row { display: block; }
+.goal-row .goal-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.goal-row .goal-val {
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.goal-bar {
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.goal-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+}
+.goal-row.achieved .goal-fill { background: var(--good); }
+.goal-row.achieved .goal-val { color: var(--good); }
+.goal-group {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  margin: 12px 0 6px;
+}
+.goal-group:first-child { margin-top: 0; }
+
 .log-list { list-style: none; margin: 0; padding: 0; background: var(--surface); border-radius: var(--radius); overflow: hidden; }
 .log-list li {
   display: flex;

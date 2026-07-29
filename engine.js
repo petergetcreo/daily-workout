@@ -108,6 +108,37 @@
   const FOCUS_BIAS  = { push: 'upper', pull: 'upper', legs: 'lower', engine: 'full', full: 'full', recover: 'full' };
   const FOCUS_AVOID = { push: 'upper', pull: 'upper', legs: 'lower' };
 
+  /* ---------------- goals ---------------- */
+
+  /* A goal lift is PINNED: any slot that can host it, gets it — frequency is
+     most of how a target is reached. Load goals also train in a strength rep
+     window (with longer rests) on their primary day, while the full-body
+     touch stays lighter. Rep goals just pin; the bodyweight rep-target
+     machinery already knows what to do with them. */
+  const GOAL_SCHEME = {
+    short:    { sets: 3, reps: '4-6' },
+    standard: { sets: 4, reps: '4-6' },
+    long:     { sets: 5, reps: '4-6' },
+  };
+  const GOAL_REST = 150;
+
+  /* Full-body slots whose fallback chains stop short of a category's
+     heaviest slot — a bench or chin-up goal should still land on full-body
+     day, so goal matching reaches one hop further than poolFor does. */
+  const GOAL_REACH = { fb_push: ['push_main'], fb_pull: ['pull_vert'] };
+
+  function goalPick(slot, goalIds, used, equip) {
+    const chain = [slot]
+      .concat(SLOT_FALLBACK[slot] || [])
+      .concat(GOAL_REACH[slot] || []);
+    for (const id of goalIds) {
+      const ex = exerciseById(id);
+      if (!ex || used.has(id) || !eligible(ex, equip)) continue;
+      if (ex.slots.some(s => chain.includes(s))) return ex;
+    }
+    return null;
+  }
+
   function eligible(item, equip) {
     return item.equip.every(code => equip[code]);
   }
@@ -137,10 +168,12 @@
     return FOCUS_ORDER[((n % FOCUS_ORDER.length) + FOCUS_ORDER.length) % FOCUS_ORDER.length];
   }
 
-  function buildPlan(key, settings, override) {
+  function buildPlan(key, settings, override, goals) {
     const ov = override || {};
     const equip = settings.equip;
     const len = settings.length;
+    // callers pass ACTIVE goals only; sorted so pinning order is stable
+    const goalIds = goals ? Object.keys(goals).sort() : [];
     const focusId = focusForDate(key, ov);
     const focus = FOCI[focusId];
 
@@ -173,22 +206,35 @@
     const main = [];
     let rampAssigned = false;
     slots.forEach(({ s: slot, i }) => {
-      const pool = poolFor(slot, used, equip);
-      if (!pool.length) return;
       const roll = (ov.rerolls && ov.rerolls[i]) || 0;
-      // Re-rolling walks deterministically through a shuffled view of the pool.
-      // Primary slots seed from the training block, not the date, so the same
-      // heavy lifts recur all block and progression has something to grip.
       const sticky = PRIMARY_SLOTS.has(slot);
-      const seed = (sticky ? 'b' + blockFor(key) : key) + '|' + slot + '|' + i;
-      const start = seededIndex(seed, pool.length);
-      const ex = pool[(start + roll) % pool.length];
+
+      // a goal lift takes any slot that can host it; rerolling escapes the
+      // pin for the day and walks the normal pool instead
+      let ex = roll ? null : goalPick(slot, goalIds, used, equip);
+      const isGoal = !!ex;
+      if (!ex) {
+        const pool = poolFor(slot, used, equip);
+        if (!pool.length) return;
+        // Re-rolling walks deterministically through a shuffled view of the
+        // pool. Primary slots seed from the training block, not the date, so
+        // the same heavy lifts recur all block and progression has grip.
+        const seed = (sticky ? 'b' + blockFor(key) : key) + '|' + slot + '|' + i;
+        const start = seededIndex(seed, pool.length);
+        ex = pool[(start + roll) % pool.length];
+      }
       used.add(ex.id);
-      const scheme = SCHEMES[ex.type][len];
+
+      let scheme = SCHEMES[ex.type][len];
+      let rest = REST[ex.type] || 60;
+      if (isGoal && goals[ex.id].type === 'load' && sticky && ex.load && ex.type === 'compound') {
+        scheme = GOAL_SCHEME[len];
+        rest = GOAL_REST;
+      }
       // the day's first heavy compound gets ramp-up sets before its work sets
       const ramp = !rampAssigned && sticky && ex.load && ex.type === 'compound';
       if (ramp) rampAssigned = true;
-      main.push({ slot, index: i, ex, sets: scheme.sets, reps: scheme.reps, rest: REST[ex.type] || 60, primary: sticky, ramp });
+      main.push({ slot, index: i, ex, sets: scheme.sets, reps: scheme.reps, rest, primary: sticky, ramp, goal: isGoal });
     });
 
     /* warm-up: three movements, leaning toward the half of the body the day
@@ -430,6 +476,6 @@
     maxableLifts, e1rm, exerciseById,
     // exposed for tests and for anything that needs to reason about slots
     SLOT_FALLBACK, PRIMARY_SLOTS, FOCUS_BIAS, FOCUS_AVOID,
-    BLOCK_DAYS, STALL_SESSIONS, STALE_DAYS,
+    BLOCK_DAYS, STALL_SESSIONS, STALE_DAYS, GOAL_SCHEME,
   };
 }));

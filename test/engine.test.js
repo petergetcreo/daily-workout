@@ -465,6 +465,108 @@ test('kettlebell movements require the kettlebell toggle, not dumbbells', () => 
   assert.ok(seen.has('kb-swing'), 'a kettlebell owner never got swings in 180 days');
 });
 
+/* ---------- goals ---------- */
+
+test('a load goal pins its lift and trains it in a strength window', () => {
+  const settings = settingsFor('garage', 'standard');
+  const goals = { 'bb-bench': { type: 'load', target: 250 } };
+  let pushDays = 0, fullDays = 0;
+  for (const key of datesFrom('2026-01-01', 84)) {
+    const plan = Engine.buildPlan(key, settings, null, goals);
+    if (plan.focusId === 'push') {
+      pushDays++;
+      const first = plan.main[0];
+      assert.strictEqual(first.ex.id, 'bb-bench', key + ' push day did not open with the goal lift');
+      assert.strictEqual(first.goal, true);
+      assert.strictEqual(first.reps, Engine.GOAL_SCHEME.standard.reps, 'goal lift not in the strength window');
+      assert.strictEqual(first.sets, Engine.GOAL_SCHEME.standard.sets);
+      assert.ok(first.rest > 100, 'heavy goal sets deserve longer rests');
+      assert.ok(first.ramp, 'the pinned heavy lift still ramps');
+    }
+    if (plan.focusId === 'full') {
+      fullDays++;
+      const hit = plan.main.find(m => m.ex.id === 'bb-bench');
+      assert.ok(hit, key + ' full day skipped the goal lift');
+      assert.strictEqual(hit.reps, SCHEMES.compound.standard.reps,
+        'the full-body touch should stay in the normal window, not grind heavy twice');
+    }
+  }
+  assert.ok(pushDays >= 10 && fullDays >= 10, 'expected to see both day types');
+});
+
+test('a rep goal pins a bodyweight movement even when loaded options exist', () => {
+  const settings = settingsFor('full', 'standard');
+  const goals = { 'pushup': { type: 'reps', target: 20 } };
+  for (const key of datesFrom('2026-01-01', 42)) {
+    const plan = Engine.buildPlan(key, settings, null, goals);
+    if (plan.focusId !== 'push') continue;
+    assert.strictEqual(plan.main[0].ex.id, 'pushup',
+      key + ' push day did not open with the goal movement');
+    assert.strictEqual(plan.main[0].reps, SCHEMES.compound.standard.reps,
+      'rep goals keep the normal rep window');
+  }
+});
+
+test('two goals share a day without fighting over one slot', () => {
+  const settings = settingsFor('garage', 'standard');
+  const goals = {
+    'bb-bench': { type: 'load', target: 250 },
+    'pushup':   { type: 'reps', target: 20 },
+  };
+  for (const key of datesFrom('2026-01-01', 42)) {
+    const plan = Engine.buildPlan(key, settings, null, goals);
+    if (plan.focusId !== 'push') continue;
+    assert.strictEqual(plan.main[0].ex.id, 'bb-bench');
+    assert.strictEqual(plan.main[1].ex.id, 'pushup', key + ' second goal did not take the next slot');
+    const ids = plan.main.map(m => m.ex.id);
+    assert.strictEqual(new Set(ids).size, ids.length, 'goal pinning produced a duplicate');
+  }
+});
+
+test('a goal reaches full-body day even when its slot has no direct pool entry', () => {
+  const settings = settingsFor('garage', 'standard');
+  const goals = { 'chinup': { type: 'reps', target: 15 } };
+  let checked = 0;
+  for (const key of datesFrom('2026-01-01', 42)) {
+    const plan = Engine.buildPlan(key, settings, null, goals);
+    if (plan.focusId !== 'full') continue;
+    checked++;
+    assert.ok(plan.main.some(m => m.ex.id === 'chinup' && m.goal),
+      key + ' full day did not host the chin-up goal');
+  }
+  assert.ok(checked >= 4);
+});
+
+test('rerolling escapes the pin for the day', () => {
+  const settings = settingsFor('garage', 'standard');
+  const goals = { 'bb-bench': { type: 'load', target: 250 } };
+  const pushKey = datesFrom('2026-01-01', 14).find(k =>
+    Engine.buildPlan(k, settings, null, goals).focusId === 'push');
+  const rolled = Engine.buildPlan(pushKey, settings, { rerolls: { 0: 1 } }, goals);
+  assert.notStrictEqual(rolled.main[0].ex.id, 'bb-bench', 'reroll should escape the pin');
+  assert.strictEqual(rolled.main[0].goal, false);
+});
+
+test('goals the equipment cannot support neither pin nor break the plan', () => {
+  const settings = settingsFor('bodyweight', 'standard');
+  const goals = { 'bb-bench': { type: 'load', target: 250 } };
+  for (const key of datesFrom('2026-01-01', 28)) {
+    const plan = Engine.buildPlan(key, settings, null, goals);
+    assert.ok(!plan.main.some(m => m.ex.id === 'bb-bench'), key + ' prescribed a barbell without a rack');
+    assert.ok(plan.main.length >= 2, key + ' plan thinned out');
+  }
+});
+
+test('goal plans stay deterministic', () => {
+  const settings = settingsFor('garage', 'standard');
+  const goals = { 'bb-bench': { type: 'load', target: 250 }, 'pushup': { type: 'reps', target: 20 } };
+  for (const key of datesFrom('2026-06-01', 21)) {
+    const a = Engine.buildPlan(key, settings, null, goals);
+    const b = Engine.buildPlan(key, settings, null, goals);
+    assert.deepStrictEqual(a.main.map(m => m.ex.id), b.main.map(m => m.ex.id), 'goal plan differs on ' + key);
+  }
+});
+
 /* ---------- timed-work progression ---------- */
 
 test('timed work stretches by 5 seconds per completed session, capped at +30', () => {

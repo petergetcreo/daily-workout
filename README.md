@@ -106,6 +106,26 @@ One deliberate restraint:
   walking away would otherwise ratchet the suggested load up off work that
   never happened.
 
+## Goals
+
+Set a target on a lift (an estimated 1RM — "bench 250") or a bodyweight
+movement (a best single set — "20 push-ups") from the Progress tab, and the
+programming aims at it, three ways:
+
+- **The goal movement is pinned.** Any slot that can host it, gets it — on its
+  own day *and* on full-body day — instead of rotating with the block.
+  Rerolling still swaps it out for the day. Capped at 3 active goals, one per
+  slot at a time; a program that chases everything catches nothing.
+- **Load goals train heavy.** The pinned lift runs a strength scheme (4 × 4–6
+  standard, longer rests) on its primary day, while the full-body touch stays
+  in the normal window. Rep goals keep the normal scheme — the existing
+  rep-target machinery does the pushing.
+- **Distance is measured.** Each goal shows current-best vs target (estimated
+  1RM from every logged session and recorded max, or best single set) with a
+  progress bar, and the goal lift's card carries a "→ 250 lb" tag. Crossing
+  the target marks the goal achieved with the date, and achieved goals stop
+  steering the program.
+
 ## Tracking
 
 **Body weight** (Progress tab) — one entry per day, logged in whatever unit is
@@ -196,7 +216,8 @@ direction — the engine should never reach back into the UI.
 npm test          # or: node --test test/engine.test.js
 ```
 
-75 tests covering library integrity, the rotation, plan generation across five
+82 tests covering library integrity, the rotation, goal pinning, plan
+generation across five
 equipment setups × three session lengths × a full year of dates, determinism,
 training blocks, reroll behaviour, short-session slot rotation, warm-up and
 finisher steering, ramp-up sets, equipment gating (including the kettlebell
@@ -255,7 +276,7 @@ but iOS blocks service workers on insecure origins, so it will not work offline.
 Everything is in `localStorage` on the device — nothing leaves the phone. Keys:
 `dw.settings`, `dw.log` (per-day sets and completion), `dw.weights` (last
 working weight per lift), `dw.overrides` (focus changes and swaps),
-`dw.body` (body weight), `dw.maxes`. Reps live in `dw.log` under
+`dw.body` (body weight), `dw.maxes`, `dw.goals`. Reps live in `dw.log` under
 `[date].reps[exerciseId]` as an array, one entry per completed set.
 
 All dates are keyed to your **local** calendar day, not UTC, so a late-night

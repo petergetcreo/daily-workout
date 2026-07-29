@@ -12,6 +12,7 @@ const KEY = {
   overrides:'dw.overrides', // { "2026-07-27": { focus, rerolls:{i:n}, finisherRoll:n } }
   body:     'dw.body',      // { "2026-07-27": 182.4 }  body weight log
   maxes:    'dw.maxes',     // { exId: { weight: 225, reps: 3, date: "2026-07-27" } }
+  goals:    'dw.goals',     // { exId: { type: 'load'|'reps', target: 250, set: date, achieved: date|null } }
   onboard:  'dw.onboarded', // true once the first-run card is dismissed
 };
 
@@ -40,6 +41,7 @@ let weights   = load(KEY.weights, {});
 let overrides = load(KEY.overrides, {});
 let body      = load(KEY.body, {});
 let maxes     = load(KEY.maxes, {});
+let goals     = load(KEY.goals, {});
 
 /* ======================= engine ======================= */
 
@@ -47,8 +49,16 @@ let maxes     = load(KEY.maxes, {});
    or storage. This layer owns state and rendering only. */
 const { dateKey, dayNumber, keyToDate, e1rm, exerciseById, repRange } = Engine;
 
+function activeGoals() {
+  const out = {};
+  for (const [id, g] of Object.entries(goals)) {
+    if (g && !g.achieved) out[id] = g;
+  }
+  return out;
+}
+
 function buildPlan(key) {
-  return Engine.buildPlan(key, settings, overrides[key]);
+  return Engine.buildPlan(key, settings, overrides[key], activeGoals());
 }
 
 /* ======================= performance history ======================= */
@@ -139,6 +149,7 @@ function persist() {
   save(KEY.overrides, overrides);
   save(KEY.body, body);
   save(KEY.maxes, maxes);
+  save(KEY.goals, goals);
 }
 
 /* ======================= maxes ======================= */
@@ -215,6 +226,7 @@ function logSet(item, s, doneSets, range, rec, key) {
 
   const nowDone = rec.sets[item.index] || 0;
   persist();
+  checkGoals();
   renderToday();
 
   // only start a rest timer when a set was newly completed, not on a rep edit
@@ -264,7 +276,12 @@ function renderToday() {
     top.className = 'ex-top';
     top.innerHTML =
       '<div style="flex:1;min-width:0">' +
-        '<div class="ex-name">' + esc(item.ex.name) + '</div>' +
+        '<div class="ex-name">' + esc(item.ex.name) +
+          (item.goal && goals[item.ex.id]
+            ? ' <span class="goal-tag">&#8594; ' + esc(goals[item.ex.id].target) + ' ' +
+              esc(goalUnitLabel(goals[item.ex.id])) + '</span>'
+            : '') +
+        '</div>' +
         '<div class="ex-cue">' + esc(item.ex.cue) + '</div>' +
       '</div>' +
       '<div class="ex-dose">' + esc(dose) + '</div>';
@@ -396,6 +413,7 @@ function renderToday() {
         if (v) { rec.weights[item.ex.id] = v; weights[item.ex.id] = v; }
         else { delete rec.weights[item.ex.id]; }
         persist();
+        checkGoals();
         renderToday(); // may surface or clear the PR chip
       };
       w.appendChild(input);
@@ -651,6 +669,142 @@ function openLiftPicker() {
   $('lift-sheet').hidden = false;
 }
 
+/* ======================= goals ======================= */
+
+const MAX_ACTIVE_GOALS = 3;
+
+/* Where a goal stands right now. Load goals measure best estimated 1RM
+   across every logged session and the recorded max; rep goals measure the
+   best single logged set. */
+function goalCurrent(exId, g) {
+  if (g.type === 'reps') {
+    let best = 0;
+    for (const r of Object.values(logs)) {
+      for (const n of ((r && r.reps && r.reps[exId]) || [])) {
+        if (Number.isFinite(n) && n > best) best = n;
+      }
+    }
+    return best;
+  }
+  let best = 0;
+  const m = maxes[exId];
+  if (m) best = e1rm(m.weight, m.reps) || parseFloat(m.weight) || 0;
+  for (const r of Object.values(logs)) {
+    const w = r && r.weights ? parseFloat(r.weights[exId]) : NaN;
+    if (!isFinite(w) || w <= 0) continue;
+    const reps = ((r.reps && r.reps[exId]) || []).filter(n => Number.isFinite(n) && n > 0);
+    const est = reps.length ? (e1rm(w, Math.max(...reps)) || w) : w;
+    if (est > best) best = est;
+  }
+  return Math.round(best);
+}
+
+/* Called after anything that could move a goal: a logged set, a weight
+   entry, a banked max. Marks freshly crossed targets and celebrates. */
+function checkGoals() {
+  let crossed = false;
+  for (const [id, g] of Object.entries(goals)) {
+    if (!g || g.achieved) continue;
+    if (goalCurrent(id, g) >= g.target) {
+      g.achieved = today();
+      crossed = true;
+    }
+  }
+  if (crossed) {
+    persist();
+    if (navigator.vibrate) navigator.vibrate([40, 60, 40, 60, 120]);
+  }
+  return crossed;
+}
+
+function goalUnitLabel(g) {
+  return g.type === 'reps' ? 'reps' : settings.units;
+}
+
+function renderGoals() {
+  const list = $('goal-list');
+  list.innerHTML = '';
+  const rows = Object.entries(goals)
+    .map(([id, g]) => [exById(id), g])
+    .filter(([e, g]) => e && g)
+    .sort((a, b) => (!!a[1].achieved - !!b[1].achieved) || a[0].name.localeCompare(b[0].name));
+
+  if (!rows.length) {
+    list.innerHTML = '<li class="empty">Chasing a number? Tap ＋ — the workouts will aim at it.</li>';
+    return;
+  }
+  for (const [ex, g] of rows) {
+    const cur = goalCurrent(ex.id, g);
+    const pct = Math.max(0, Math.min(100, g.target > 0 ? (cur / g.target) * 100 : 0));
+    const li = document.createElement('li');
+    li.className = 'tappable goal-row' + (g.achieved ? ' achieved' : '');
+    li.innerHTML =
+      '<div class="goal-top">' +
+        '<span class="max-name">' + esc(ex.name) + '</span>' +
+        '<span class="goal-val">' + (g.achieved
+          ? '&#10003; ' + esc(g.target) + ' ' + goalUnitLabel(g) + ' · ' +
+            keyToDate(g.achieved).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+          : esc(cur) + ' → ' + esc(g.target) + ' ' + goalUnitLabel(g)) + '</span>' +
+      '</div>' +
+      '<div class="goal-bar"><div class="goal-fill" style="width:' + pct.toFixed(1) + '%"></div></div>';
+    li.onclick = () => openGoalSheet(ex.id);
+    list.appendChild(li);
+  }
+}
+
+let goalSheetId = null;
+
+function openGoalSheet(exId) {
+  const ex = exById(exId);
+  if (!ex) return;
+  goalSheetId = exId;
+  const type = ex.load ? 'load' : 'reps';
+  const existing = goals[exId];
+  const cur = goalCurrent(exId, existing || { type });
+  $('goal-sheet-title').textContent = ex.name;
+  $('goal-current').textContent = type === 'reps'
+    ? (cur ? 'Best single set so far: ' + cur + ' reps.' : 'No sets logged yet.')
+    : (cur ? 'Best estimated 1RM so far: ' + cur + ' ' + settings.units + '.' : 'Nothing logged yet for this lift.');
+  $('goal-target-label').firstChild.textContent = type === 'reps' ? 'Target reps (one set)' : 'Target 1RM (' + settings.units + ')';
+  $('goal-target').value = existing ? existing.target : '';
+  $('goal-delete').hidden = !existing;
+  $('goal-pick-sheet').hidden = true;
+  $('goal-sheet').hidden = false;
+}
+
+function openGoalPicker() {
+  const activeCount = Object.values(goals).filter(g => g && !g.achieved).length;
+  const box = $('goal-pick-options');
+  box.innerHTML = '';
+  if (activeCount >= MAX_ACTIVE_GOALS) {
+    $('goal-pick-hint').textContent =
+      MAX_ACTIVE_GOALS + ' active goals is the cap — a program that chases everything catches nothing. Finish or remove one first.';
+  } else {
+    $('goal-pick-hint').textContent =
+      'Load goals aim for an estimated 1RM. Bodyweight goals aim for a best single set.';
+    const loaded = Engine.maxableLifts();
+    const bodywt = EXERCISES.filter(e =>
+      !e.load && ['compound', 'accessory'].includes(e.type) && repRange(SCHEMES[e.type].standard.reps));
+    const addGroup = (title, items, tag) => {
+      const h = document.createElement('div');
+      h.className = 'goal-group';
+      h.textContent = title;
+      box.appendChild(h);
+      items.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach(ex => {
+        const b = document.createElement('button');
+        b.className = 'focus-opt' + (goals[ex.id] ? ' on' : '');
+        b.innerHTML = '<span>' + esc(ex.name) +
+          (goals[ex.id] ? '<small>' + esc(goals[ex.id].target) + ' ' + esc(tag) + ' goal</small>' : '') + '</span>';
+        b.onclick = () => openGoalSheet(ex.id);
+        box.appendChild(b);
+      });
+    };
+    addGroup('Add weight to', loaded, settings.units);
+    addGroup('Add reps to', bodywt, 'rep');
+  }
+  $('goal-pick-sheet').hidden = false;
+}
+
 /* ======================= lift trends ======================= */
 
 /* One point per session for a lift, valued at the Epley estimate of its top
@@ -720,6 +874,7 @@ function renderLiftTrends() {
 function renderHistory() {
   renderBodyweight();
   renderMaxes();
+  renderGoals();
   renderLiftTrends();
   const done = Object.entries(logs).filter(([, v]) => v.complete);
   $('stat-streak').textContent = streak();
@@ -852,7 +1007,7 @@ let pendingImport = null;
 
 function validateBackup(d) {
   if (!d || typeof d !== 'object' || Array.isArray(d)) return false;
-  const sections = ['settings', 'logs', 'weights', 'overrides', 'body', 'maxes'];
+  const sections = ['settings', 'logs', 'weights', 'overrides', 'body', 'maxes', 'goals'];
   const present = sections.filter(k => d[k] && typeof d[k] === 'object' && !Array.isArray(d[k]));
   if (!present.length) return false;
   // date-keyed sections must actually be keyed by dates
@@ -889,6 +1044,7 @@ function applyImport(mode) {
     overrides = d.overrides || {};
     body      = d.body      || {};
     maxes     = d.maxes     || {};
+    goals     = d.goals     || {};
   } else {
     // merge: this device wins date and lift conflicts; a max keeps whichever
     // record is heavier, because a max is a best, not a latest
@@ -896,6 +1052,7 @@ function applyImport(mode) {
     overrides = Object.assign({}, d.overrides || {}, overrides);
     body      = Object.assign({}, d.body || {}, body);
     weights   = Object.assign({}, d.weights || {}, weights);
+    goals     = Object.assign({}, d.goals || {}, goals);
     for (const [id, m] of Object.entries(d.maxes || {})) {
       const cur = maxes[id];
       if (!cur || (parseFloat(m && m.weight) || 0) > (parseFloat(cur.weight) || 0)) maxes[id] = m;
@@ -1100,8 +1257,10 @@ $('max-save').onclick = () => {
   if (!maxSheetId || !isFinite(w) || w <= 0 || !isFinite(r) || r < 1) return;
   maxes[maxSheetId] = { weight: Math.round(w * 10) / 10, reps: r, date: today() };
   persist();
+  checkGoals();
   $('max-sheet').hidden = true;
   renderMaxes();
+  renderGoals();
   renderToday();   // clears the PR chip now that the max is banked
   if (navigator.vibrate) navigator.vibrate(30);
 };
@@ -1215,6 +1374,43 @@ $('import-sheet').onclick = e => {
   if (e.target.id === 'import-sheet') { pendingImport = null; $('import-sheet').hidden = true; }
 };
 
+/* goals */
+$('goal-add').onclick = openGoalPicker;
+$('goal-pick-cancel').onclick = () => { $('goal-pick-sheet').hidden = true; };
+$('goal-pick-sheet').onclick = e => { if (e.target.id === 'goal-pick-sheet') $('goal-pick-sheet').hidden = true; };
+$('goal-cancel').onclick = () => { goalSheetId = null; $('goal-sheet').hidden = true; };
+$('goal-sheet').onclick = e => { if (e.target.id === 'goal-sheet') { goalSheetId = null; $('goal-sheet').hidden = true; } };
+$('goal-save').onclick = () => {
+  const t = parseFloat($('goal-target').value);
+  const ex = goalSheetId && exById(goalSheetId);
+  if (!ex || !isFinite(t) || t <= 0) return;
+  const type = ex.load ? 'load' : 'reps';
+  const existing = goals[goalSheetId];
+  const g = {
+    type,
+    target: type === 'reps' ? Math.round(t) : Math.round(t * 10) / 10,
+    set: existing ? existing.set : today(),
+    achieved: null,
+  };
+  // already there? mark it achieved rather than pretending it is a chase
+  if (goalCurrent(goalSheetId, g) >= g.target) g.achieved = today();
+  goals[goalSheetId] = g;
+  persist();
+  goalSheetId = null;
+  $('goal-sheet').hidden = true;
+  renderGoals();
+  renderToday();   // pin may change today's plan
+  if (navigator.vibrate) navigator.vibrate(30);
+};
+$('goal-delete').onclick = () => {
+  if (goalSheetId) delete goals[goalSheetId];
+  persist();
+  goalSheetId = null;
+  $('goal-sheet').hidden = true;
+  renderGoals();
+  renderToday();
+};
+
 /* past day viewer */
 $('day-cancel').onclick = () => { $('day-sheet').hidden = true; };
 $('day-sheet').onclick = e => { if (e.target.id === 'day-sheet') $('day-sheet').hidden = true; };
@@ -1232,7 +1428,7 @@ $('onboard-equip').onclick = () => {
 $('onboard').hidden = !!load(KEY.onboard, false);
 
 $('export-btn').onclick = () => {
-  const blob = new Blob([JSON.stringify({ settings, logs, weights, overrides, body, maxes }, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ settings, logs, weights, overrides, body, maxes, goals }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'daily-workout-' + today() + '.json';
