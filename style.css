@@ -440,6 +440,22 @@ button { font-family: inherit; cursor: pointer; }
 /* past-day sheet list can get long */
 #day-sheet-list { max-height: 45vh; overflow-y: auto; margin-bottom: 4px; }
 
+/* PT test sheet */
+.pt-run { display: flex; align-items: center; gap: 5px; font-weight: 400; }
+.pt-run input {
+  width: 54px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 8px 4px;
+  color: var(--text);
+  font-size: 15px;
+}
+.pt-run b { color: var(--muted); }
+#pt-sheet .field { background: var(--surface-2); }
+#pt-timer { margin-bottom: 12px; }
+
 /* first-open setup sheet */
 .setup-card { max-height: calc(100dvh - 40px); overflow-y: auto; }
 .setup-card .field { background: var(--surface-2); }

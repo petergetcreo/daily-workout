@@ -43,6 +43,18 @@
       </div>
     </div>
 
+    <div class="block onboard" id="pt-card" hidden>
+      <div class="block-head"><h2>Calibrate with a PT test</h2></div>
+      <p class="hint">Ten hard minutes to size the training to you: 2 minutes
+        each of max push-ups, sit-ups, and air squats (rest between stations),
+        then a timed mile. Your counts set the bodyweight rep targets, sit-ups
+        set the core doses, the mile sets the conditioning.</p>
+      <div class="onboard-btns">
+        <button class="primary" id="pt-take">Take the test</button>
+        <button class="ghost" id="pt-later">Maybe later</button>
+      </div>
+    </div>
+
     <div class="block">
       <div class="block-head">
         <h2>Warm-up</h2>
@@ -161,6 +173,7 @@
         <button data-val="regular">Regular<small>3-week blocks</small></button>
         <button data-val="seasoned">Seasoned<small>2-week blocks</small></button>
       </div>
+      <button class="ghost" id="pt-open">Take the PT test</button>
     </div>
 
     <div class="block">
@@ -263,6 +276,36 @@
     <button class="primary" id="import-replace">Replace everything on this device</button>
     <button class="ghost" id="import-merge">Merge — this device wins conflicts</button>
     <button class="ghost" id="import-cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- PT test -->
+<div class="sheet" id="pt-sheet" hidden>
+  <div class="sheet-card setup-card">
+    <h2>PT test</h2>
+    <p class="hint">Warm up first. Each station: <strong>2 minutes, as many
+      clean reps as you can</strong>, then rest about 3 minutes. Finish with a
+      hard 1-mile run, timed. Skip any station — it just leaves that part of
+      the programming alone.</p>
+    <button class="ghost" id="pt-timer">Start a 2:00 station timer</button>
+    <label class="field">Push-ups (2 min)
+      <input type="number" id="pt-pushups" inputmode="numeric" min="1" max="200" placeholder="—">
+    </label>
+    <label class="field">Sit-ups (2 min)
+      <input type="number" id="pt-situps" inputmode="numeric" min="1" max="200" placeholder="—">
+    </label>
+    <label class="field">Air squats (2 min)
+      <input type="number" id="pt-squats" inputmode="numeric" min="1" max="200" placeholder="—">
+    </label>
+    <div class="field">1-mile run
+      <span class="pt-run">
+        <input type="number" id="pt-run-min" inputmode="numeric" min="4" max="30" placeholder="mm">
+        <b>:</b>
+        <input type="number" id="pt-run-sec" inputmode="numeric" min="0" max="59" placeholder="ss">
+      </span>
+    </div>
+    <button class="primary" id="pt-save">Save results</button>
+    <button class="ghost" id="pt-cancel">Cancel</button>
   </div>
 </div>
 

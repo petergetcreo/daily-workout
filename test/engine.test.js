@@ -525,6 +525,85 @@ test('heart-rate zones come from 220 minus age and refuse junk', () => {
   assert.strictEqual(Engine.hrZones('nope'), null);
 });
 
+/* ---------- PT test calibration ---------- */
+
+test('a 2-minute max maps to a 30-45% work window, clamped sane', () => {
+  assert.strictEqual(Engine.ptWindow(40), '12-18');
+  assert.strictEqual(Engine.ptWindow(10), '4-6', 'low capacity still gets a real window');
+  assert.strictEqual(Engine.ptWindow(70), '21-25', 'high capacity caps at 25 — beyond that is endurance');
+  assert.strictEqual(Engine.ptWindow(1), '4-6', 'floor of 4 with a workable span');
+  assert.strictEqual(Engine.ptWindow(0), null);
+  assert.strictEqual(Engine.ptWindow('junk'), null);
+  assert.strictEqual(Engine.ptWindow(null), null);
+});
+
+test('PT results resize bodyweight, core, and conditioning work', () => {
+  const base = settingsFor('bodyweight', 'standard');
+  const tested = Object.assign({}, base, {
+    profile: { pt: { pushups: 40, squats: 60, situps: 60, runSec: 480 } },
+  });
+  let sawPush = 0, sawLegs = 0, sawCore = 0, sawInterval = 0;
+  for (const key of datesFrom('2026-01-01', 28)) {
+    const plan = Engine.buildPlan(key, tested);
+    for (const m of plan.main) {
+      if (m.ex.id === 'pushup') { sawPush++; assert.strictEqual(m.reps, '12-18'); }
+      if (m.ex.id === 'bw-squat') { sawLegs++; assert.strictEqual(m.reps, '18-25'); }
+      if (m.ex.type === 'core' && /sec/.test(m.reps)) {
+        sawCore++;
+        // 40 sec standard dose × clamp(60/40 → 1.3) = 52 → rounds to the 5s grid
+        assert.strictEqual(m.reps, '50 sec');
+      }
+      if (m.ex.type === 'interval') {
+        sawInterval++;
+        // 40 sec × (600/480 = 1.25) = 50
+        assert.strictEqual(m.reps, '50 sec');
+      }
+    }
+  }
+  assert.ok(sawPush && sawLegs && sawCore && sawInterval,
+    `expected all domains exercised: ${sawPush}/${sawLegs}/${sawCore}/${sawInterval}`);
+});
+
+test('skipped stations and untested domains stay on the defaults', () => {
+  const base = settingsFor('full', 'standard');
+  const partial = Object.assign({}, base, { profile: { pt: { pushups: 40 } } });
+  for (const key of datesFrom('2026-01-01', 28)) {
+    const plain = Engine.buildPlan(key, base);
+    const tested = Engine.buildPlan(key, partial);
+    assert.deepStrictEqual(tested.main.map(m => m.ex.id), plain.main.map(m => m.ex.id),
+      'a PT test must never change WHICH exercises appear');
+    for (let j = 0; j < tested.main.length; j++) {
+      const t = tested.main[j], p = plain.main[j];
+      const isPushBw = !t.ex.load && t.ex.slots.some(s =>
+        ['push_main', 'push_second', 'push_acc', 'triceps', 'fb_push'].includes(s)) &&
+        Engine.repRange(p.reps);
+      if (isPushBw) assert.strictEqual(t.reps, '12-18', t.ex.id + ' should calibrate');
+      else assert.strictEqual(t.reps, p.reps, t.ex.id + ' changed without a test to justify it');
+    }
+  }
+});
+
+test('loaded lifts and the pull chain are never touched by a PT test', () => {
+  const base = settingsFor('garage', 'standard');
+  const tested = Object.assign({}, base, {
+    profile: { pt: { pushups: 80, squats: 80, situps: 80, runSec: 360 } },
+  });
+  for (const key of datesFrom('2026-01-01', 28)) {
+    const plain = Engine.buildPlan(key, base);
+    const withPt = Engine.buildPlan(key, tested);
+    for (let j = 0; j < withPt.main.length; j++) {
+      const t = withPt.main[j], p = plain.main[j];
+      if (t.ex.load && t.ex.type !== 'core') {
+        assert.strictEqual(t.reps, p.reps, t.ex.id + ': the bar already personalizes loaded work');
+      }
+      const pullBw = !t.ex.load && t.ex.slots.some(s =>
+        ['pull_horiz', 'pull_vert', 'pull_acc', 'biceps', 'fb_pull'].includes(s)) &&
+        Engine.repRange(p.reps) && t.ex.type !== 'core';
+      if (pullBw) assert.strictEqual(t.reps, p.reps, t.ex.id + ': push-ups say nothing about pulling');
+    }
+  }
+});
+
 /* ---------- goals ---------- */
 
 test('a load goal pins its lift and trains it in a strength window', () => {

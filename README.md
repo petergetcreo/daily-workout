@@ -119,6 +119,25 @@ field earns its place by changing something:
   4-week blocks (repetition to learn the lifts), regular = 3 weeks, seasoned =
   2 weeks (earned variety).
 
+## The PT test
+
+An optional ten-minute capacity test — 2 minutes each of max push-ups,
+sit-ups, and air squats (with rests), then a timed mile — offered on first
+open and retakeable from Settings. Not a max-lift test: the bar already
+personalizes loaded work, so the test calibrates everything the bar can't.
+
+- **Push-up and squat counts size bodyweight rep windows** directly: work
+  sets land at 30–45% of the 2-minute max (test 40 push-ups → train 12–18;
+  test 10 → train 4–6), clamped to a sane 4–25.
+- **Sit-ups scale timed core doses**, ±30% around a 40-rep baseline.
+- **The mile scales conditioning volume** — interval and cardio doses —
+  ±30% around a 10:00 baseline.
+- Skipped stations leave their domain on the defaults, and the pull chain is
+  deliberately untouched: a push-up count says nothing about pull-ups.
+
+The sheet includes a 2:00 station timer (the rest timer, repurposed). Which
+exercises appear never changes — only the prescriptions.
+
 ## Goals
 
 Set a target on a lift (an estimated 1RM — "bench 250") or a bodyweight
@@ -231,9 +250,9 @@ direction — the engine should never reach back into the UI.
 npm test          # or: node --test test/engine.test.js
 ```
 
-85 tests covering library integrity, the rotation, goal pinning, profile
-effects (experience block lengths, age-scaled warm-ups, heart-rate zones),
-plan generation across five
+89 tests covering library integrity, the rotation, goal pinning, PT-test
+calibration, profile effects (experience block lengths, age-scaled warm-ups,
+heart-rate zones), plan generation across five
 equipment setups × three session lengths × a full year of dates, determinism,
 training blocks, reroll behaviour, short-session slot rotation, warm-up and
 finisher steering, ramp-up sets, equipment gating (including the kettlebell

@@ -122,6 +122,54 @@
   const FOCUS_BIAS  = { push: 'upper', pull: 'upper', legs: 'lower', engine: 'full', full: 'full', recover: 'full' };
   const FOCUS_AVOID = { push: 'upper', pull: 'upper', legs: 'lower' };
 
+  /* ---------------- PT test ---------------- */
+
+  /* A field test, not a max-lift test: 2 minutes each of push-ups, sit-ups
+     and air squats, plus a timed mile. The counts size bodyweight rep work
+     directly — work sets land at 30–45% of a 2-minute max — sit-ups scale
+     timed core doses, and the mile scales conditioning volume. A skipped
+     station leaves its domain on the defaults. The pull chain is untouched
+     on purpose: a push-up count says nothing about it, and loaded lifts
+     already personalize through the weight on the bar. */
+  const PT_BASELINE = { situps: 40, runSec: 600 };
+  const PT_PUSH_SLOTS = ['push_main', 'push_second', 'push_acc', 'triceps', 'fb_push'];
+  const PT_LEGS_SLOTS = ['squat', 'hinge', 'unilateral', 'calves', 'fb_lower'];
+
+  function ptWindow(count) {
+    const c = parseInt(count, 10);
+    if (!Number.isFinite(c) || c < 1) return null;
+    const lo = Math.max(4, Math.round(c * 0.3));
+    const hi = Math.min(25, Math.max(lo + 2, Math.round(c * 0.45)));
+    return lo + '-' + hi;
+  }
+  function ptMult(ratio) {
+    return Number.isFinite(ratio) && ratio > 0
+      ? Math.min(1.3, Math.max(0.7, ratio))
+      : null;
+  }
+  function scaleTimed(reps, mult) {
+    if (!mult) return reps;
+    const s = String(reps);
+    const sec = s.match(/^(\d+)\s*sec$/i);
+    if (sec) return Math.max(15, Math.round((+sec[1] * mult) / 5) * 5) + ' sec';
+    const min = s.match(/^(\d+)\s*min$/i);
+    if (min) return Math.max(4, Math.round(+min[1] * mult)) + ' min';
+    return reps;
+  }
+  function ptAdjust(ex, reps, pt) {
+    if (!pt) return reps;
+    if (!ex.load && /^\d+(\s*[-–]\s*\d+)?$/.test(String(reps).trim())) {
+      if (ex.slots.some(s => PT_PUSH_SLOTS.includes(s))) return ptWindow(pt.pushups) || reps;
+      if (ex.slots.some(s => PT_LEGS_SLOTS.includes(s))) return ptWindow(pt.squats) || reps;
+      return reps;
+    }
+    if (ex.type === 'core') return scaleTimed(reps, ptMult(pt.situps / PT_BASELINE.situps));
+    if (ex.type === 'interval' || ex.type === 'cardio') {
+      return scaleTimed(reps, ptMult(PT_BASELINE.runSec / pt.runSec));
+    }
+    return reps;
+  }
+
   /* ---------------- goals ---------------- */
 
   /* A goal lift is PINNED: any slot that can host it, gets it — frequency is
@@ -188,6 +236,7 @@
     const len = settings.length;
     const prof = settings.profile || {};
     const blockDays = EXPERIENCE_BLOCKS[prof.experience] || BLOCK_DAYS;
+    const pt = prof.pt || null;
     // callers pass ACTIVE goals only; sorted so pinning order is stable
     const goalIds = goals ? Object.keys(goals).sort() : [];
     const focusId = focusForDate(key, ov);
@@ -250,7 +299,7 @@
       // the day's first heavy compound gets ramp-up sets before its work sets
       const ramp = !rampAssigned && sticky && ex.load && ex.type === 'compound';
       if (ramp) rampAssigned = true;
-      main.push({ slot, index: i, ex, sets: scheme.sets, reps: scheme.reps, rest, primary: sticky, ramp, goal: isGoal });
+      main.push({ slot, index: i, ex, sets: scheme.sets, reps: ptAdjust(ex, scheme.reps, pt), rest, primary: sticky, ramp, goal: isGoal });
     });
 
     /* warm-up: three movements, leaning toward the half of the body the day
@@ -492,7 +541,7 @@
     dateKey, dayNumber, keyToDate, blockFor,
     focusForDate, buildPlan, estimateMinutes,
     repRange, progression, countHolds, loadStep, rampSets,
-    repTarget, staleAdjust, startingWeight, timedTarget, hrZones,
+    repTarget, staleAdjust, startingWeight, timedTarget, hrZones, ptWindow,
     maxableLifts, e1rm, exerciseById,
     // exposed for tests and for anything that needs to reason about slots
     SLOT_FALLBACK, PRIMARY_SLOTS, FOCUS_BIAS, FOCUS_AVOID,

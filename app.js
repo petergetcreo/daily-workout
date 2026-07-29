@@ -15,6 +15,7 @@ const KEY = {
   goals:    'dw.goals',     // { exId: { type: 'load'|'reps', target: 250, set: date, achieved: date|null } }
   onboard:  'dw.onboarded', // true once the how-logging-works card is dismissed
   setup:    'dw.setup',     // true once the first-open setup sheet is closed
+  ptcard:   'dw.ptcard',    // true once the PT-test invitation is dismissed
 };
 
 const DEFAULT_SETTINGS = {
@@ -1472,6 +1473,63 @@ $('onboard-done').onclick = () => {
   $('onboard').hidden = true;
 };
 $('onboard').hidden = !!load(KEY.onboard, false);
+
+/* PT test: a capacity field test whose results live in profile.pt and
+   recalibrate bodyweight rep windows, core doses, and conditioning volume. */
+function fmtRun(sec) {
+  return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+}
+
+function updatePtCard() {
+  $('pt-card').hidden = !!settings.profile.pt || !!load(KEY.ptcard, false);
+  const pt = settings.profile.pt;
+  $('pt-open').textContent = pt
+    ? 'Retake the PT test (' +
+      [pt.pushups != null ? pt.pushups + ' push' : null,
+       pt.situps != null ? pt.situps + ' sit' : null,
+       pt.squats != null ? pt.squats + ' squat' : null,
+       pt.runSec != null ? fmtRun(pt.runSec) + ' mile' : null]
+        .filter(Boolean).join(' · ') + ')'
+    : 'Take the PT test — sizes the rep targets to you';
+}
+
+function openPtSheet() {
+  const pt = settings.profile.pt || {};
+  $('pt-pushups').value = pt.pushups != null ? pt.pushups : '';
+  $('pt-situps').value  = pt.situps  != null ? pt.situps  : '';
+  $('pt-squats').value  = pt.squats  != null ? pt.squats  : '';
+  $('pt-run-min').value = pt.runSec != null ? Math.floor(pt.runSec / 60) : '';
+  $('pt-run-sec').value = pt.runSec != null ? pt.runSec % 60 : '';
+  $('pt-sheet').hidden = false;
+}
+
+$('pt-take').onclick = openPtSheet;
+$('pt-open').onclick = openPtSheet;
+$('pt-later').onclick = () => { save(KEY.ptcard, true); updatePtCard(); };
+$('pt-timer').onclick = () => startRest(120, 'Max clean reps — go!');
+$('pt-cancel').onclick = () => { $('pt-sheet').hidden = true; };
+$('pt-sheet').onclick = e => { if (e.target.id === 'pt-sheet') $('pt-sheet').hidden = true; };
+$('pt-save').onclick = () => {
+  const count = id => {
+    const v = parseInt($(id).value, 10);
+    return (Number.isFinite(v) && v >= 1 && v <= 200) ? v : null;
+  };
+  const mm = parseInt($('pt-run-min').value, 10);
+  const ss = parseInt($('pt-run-sec').value, 10);
+  const runSec = Number.isFinite(mm) && mm >= 4 && mm <= 30
+    ? mm * 60 + (Number.isFinite(ss) && ss >= 0 && ss <= 59 ? ss : 0)
+    : null;
+  const pt = { pushups: count('pt-pushups'), situps: count('pt-situps'),
+               squats: count('pt-squats'), runSec, date: today() };
+  if (pt.pushups == null && pt.situps == null && pt.squats == null && pt.runSec == null) return;
+  settings.profile.pt = pt;
+  save(KEY.settings, settings);
+  $('pt-sheet').hidden = true;
+  updatePtCard();
+  renderToday();   // the prescriptions just changed
+  if (navigator.vibrate) navigator.vibrate(30);
+};
+updatePtCard();
 
 /* first-open setup sheet: profile + equipment, shown once. The seg and the
    toggles write straight into settings; Start banks the typed fields too. */
