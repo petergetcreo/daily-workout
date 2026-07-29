@@ -31,6 +31,20 @@
   <section id="view-today" class="view active">
     <div class="progressbar"><div class="progressbar-fill" id="progress-fill"></div></div>
 
+    <div class="block onboard" id="onboard" hidden>
+      <div class="block-head"><h2>First time? Two things</h2></div>
+      <p class="hint"><strong>Tap a set number to log it</strong> — one tap
+        means you hit the target reps. Came up short? Tap it again to count
+        down one rep at a time. The <strong>&#8635;</strong> button swaps any
+        exercise for another that fits the day.</p>
+      <p class="hint">And tell the app what equipment you own — every workout
+        is built around exactly what is switched on.</p>
+      <div class="onboard-btns">
+        <button class="primary" id="onboard-equip">Set my equipment</button>
+        <button class="ghost" id="onboard-done">Got it</button>
+      </div>
+    </div>
+
     <div class="block">
       <div class="block-head">
         <h2>Warm-up</h2>
@@ -153,6 +167,8 @@
       <div class="block-head"><h2>Data</h2></div>
       <p class="hint">Everything lives on this device only. Nothing is uploaded anywhere.</p>
       <button class="ghost" id="export-btn">Export my data</button>
+      <button class="ghost" id="import-btn">Import a backup</button>
+      <input type="file" id="import-file" accept=".json,application/json" hidden>
       <button class="ghost danger" id="reset-btn">Erase all data</button>
     </div>
     <div class="spacer"></div>
@@ -212,6 +228,27 @@
     <h2>Pick a lift</h2>
     <div id="lift-options" class="lift-options"></div>
     <button class="ghost" id="lift-cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- import backup -->
+<div class="sheet" id="import-sheet" hidden>
+  <div class="sheet-card">
+    <h2>Import backup</h2>
+    <p class="hint" id="import-summary"></p>
+    <button class="primary" id="import-replace">Replace everything on this device</button>
+    <button class="ghost" id="import-merge">Merge — this device wins conflicts</button>
+    <button class="ghost" id="import-cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- past day viewer -->
+<div class="sheet" id="day-sheet" hidden>
+  <div class="sheet-card">
+    <h2 id="day-sheet-title">—</h2>
+    <p class="hint" id="day-sheet-sub"></p>
+    <ul class="log-list" id="day-sheet-list"></ul>
+    <button class="ghost" id="day-cancel">Close</button>
   </div>
 </div>
 

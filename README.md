@@ -150,6 +150,10 @@ trained lifts that have at least two logged sessions.
 - "Change today's focus" overrides the rotation for today only.
 - Streak counts consecutive days marked complete. Not marking today does not
   break yesterday's streak until the day rolls over.
+- Tap any day in the Progress calendar to see what that day actually recorded
+  — lifts, loads, reps, and the body weight entry, read-only.
+- A one-time first-run card explains the tap-to-log gesture and points new
+  users at equipment setup before their first session.
 
 ## Files
 
@@ -254,5 +258,10 @@ weigh-in files under the day you were actually living in.
 Switching lb/kg relabels the display but does **not** convert numbers you
 already logged.
 
-Settings → Export writes a JSON backup. Settings → Erase clears it all.
-Because it is per-origin storage, moving to a different URL starts fresh.
+Settings → Export writes a JSON backup. Settings → Import restores one —
+either **replace** (wipe this device, then load the file) or **merge** (union
+of both; this device wins where both logged the same day or lift, and maxes
+keep whichever record is heavier). Files are validated before anything is
+touched. Settings → Erase clears it all. Because it is per-origin storage,
+moving to a different URL starts fresh — export from the old one, import into
+the new one.

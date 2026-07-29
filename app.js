@@ -12,6 +12,7 @@ const KEY = {
   overrides:'dw.overrides', // { "2026-07-27": { focus, rerolls:{i:n}, finisherRoll:n } }
   body:     'dw.body',      // { "2026-07-27": 182.4 }  body weight log
   maxes:    'dw.maxes',     // { exId: { weight: 225, reps: 3, date: "2026-07-27" } }
+  onboard:  'dw.onboarded', // true once the first-run card is dismissed
 };
 
 const DEFAULT_SETTINGS = {
@@ -725,6 +726,11 @@ function renderHistory() {
       if (d > now && k !== today()) c.classList.add('future');
       c.textContent = d.getDate();
       c.title = k;
+      // any day with a record opens the read-only day view
+      if ((logs[k] || body[k] != null) && !(d > now && k !== today())) {
+        c.classList.add('has-log');
+        c.onclick = () => openDaySheet(k);
+      }
       row.appendChild(c);
     }
     cal.appendChild(row);
@@ -764,6 +770,111 @@ function renderHistory() {
         wl.appendChild(li);
       });
   }
+}
+
+/* ======================= past day viewer ======================= */
+
+/* Read-only view of what a day's log actually recorded. Rendered from the
+   exercise-id-keyed reps/weights maps, NOT by rebuilding the plan — settings
+   may have changed since, but the record is the record. */
+function openDaySheet(key) {
+  const r = logs[key];
+  $('day-sheet-title').textContent = keyToDate(key)
+    .toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+
+  const bits = [];
+  const focus = r && r.focus && FOCI[r.focus] ? FOCI[r.focus].label : null;
+  if (focus) bits.push(focus + (r.complete ? ' · completed' : ' · not marked complete'));
+  if (body[key] != null) bits.push('body weight ' + body[key] + ' ' + settings.units);
+  $('day-sheet-sub').textContent = bits.join(' — ') || 'Nothing logged this day.';
+
+  const list = $('day-sheet-list');
+  list.innerHTML = '';
+  const ids = [...new Set([
+    ...Object.keys((r && r.reps) || {}),
+    ...Object.keys((r && r.weights) || {}),
+  ])].map(id => exById(id)).filter(Boolean)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  for (const ex of ids) {
+    const w = r.weights && r.weights[ex.id];
+    const reps = ((r.reps && r.reps[ex.id]) || []).filter(n => Number.isFinite(n) && n > 0);
+    const load = w != null && w !== '' ? esc(w) + ' ' + settings.units + (reps.length ? ' × ' : '') : '';
+    const li = document.createElement('li');
+    li.innerHTML = '<span>' + esc(ex.name) + '</span>' +
+      '<span class="l-val">' + load + esc(reps.join('·')) + '</span>';
+    list.appendChild(li);
+  }
+  if (!ids.length) {
+    list.innerHTML = '<li class="empty">' +
+      (r ? 'No individual sets were logged.' : 'No workout logged.') + '</li>';
+  }
+  $('day-sheet').hidden = false;
+}
+
+/* ======================= import ======================= */
+
+let pendingImport = null;
+
+function validateBackup(d) {
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return false;
+  const sections = ['settings', 'logs', 'weights', 'overrides', 'body', 'maxes'];
+  const present = sections.filter(k => d[k] && typeof d[k] === 'object' && !Array.isArray(d[k]));
+  if (!present.length) return false;
+  // date-keyed sections must actually be keyed by dates
+  for (const k of ['logs', 'overrides', 'body']) {
+    if (d[k] && Object.keys(d[k]).some(key => !/^\d{4}-\d{2}-\d{2}$/.test(key))) return false;
+  }
+  return true;
+}
+
+function describeBackup(d) {
+  const n = obj => Object.keys(obj || {}).length;
+  const days = n(d.logs), weighins = n(d.body), maxCount = n(d.maxes);
+  return `This backup holds ${days} logged day${days === 1 ? '' : 's'}, ` +
+    `${weighins} weigh-in${weighins === 1 ? '' : 's'} and ${maxCount} max${maxCount === 1 ? '' : 'es'}. ` +
+    `Replace wipes this device first. Merge keeps this device's entry wherever both logged the same day.`;
+}
+
+function openImportSheet(message, importable) {
+  $('import-summary').textContent = message;
+  $('import-replace').hidden = !importable;
+  $('import-merge').hidden = !importable;
+  $('import-sheet').hidden = false;
+}
+
+function applyImport(mode) {
+  const d = pendingImport;
+  if (!d) return;
+  if (mode === 'replace') {
+    settings = Object.assign(structuredClone(DEFAULT_SETTINGS), d.settings || {});
+    settings.equip = Object.assign(structuredClone(DEFAULT_SETTINGS.equip),
+      (d.settings && d.settings.equip) || {});
+    logs      = d.logs      || {};
+    weights   = d.weights   || {};
+    overrides = d.overrides || {};
+    body      = d.body      || {};
+    maxes     = d.maxes     || {};
+  } else {
+    // merge: this device wins date and lift conflicts; a max keeps whichever
+    // record is heavier, because a max is a best, not a latest
+    logs      = Object.assign({}, d.logs || {}, logs);
+    overrides = Object.assign({}, d.overrides || {}, overrides);
+    body      = Object.assign({}, d.body || {}, body);
+    weights   = Object.assign({}, d.weights || {}, weights);
+    for (const [id, m] of Object.entries(d.maxes || {})) {
+      const cur = maxes[id];
+      if (!cur || (parseFloat(m && m.weight) || 0) > (parseFloat(cur.weight) || 0)) maxes[id] = m;
+    }
+  }
+  save(KEY.settings, settings);
+  persist();
+  pendingImport = null;
+  $('import-sheet').hidden = true;
+  renderSettings();
+  renderToday();
+  renderHistory();
+  if (navigator.vibrate) navigator.vibrate(30);
 }
 
 /* ======================= settings ======================= */
@@ -965,6 +1076,50 @@ document.querySelectorAll('#seg-units button').forEach(b => {
     renderToday();
   };
 });
+
+/* import */
+$('import-btn').onclick = () => $('import-file').click();
+$('import-file').onchange = e => {
+  const file = e.target.files[0];
+  e.target.value = ''; // allow re-picking the same file after a cancel
+  if (!file) return;
+  file.text().then(text => {
+    let data = null;
+    try { data = JSON.parse(text); } catch (err) { /* fall through */ }
+    if (!data) {
+      pendingImport = null;
+      openImportSheet('That file is not readable JSON.', false);
+    } else if (!validateBackup(data)) {
+      pendingImport = null;
+      openImportSheet('That file does not look like a Daily Workout backup.', false);
+    } else {
+      pendingImport = data;
+      openImportSheet(describeBackup(data), true);
+    }
+  });
+};
+$('import-replace').onclick = () => applyImport('replace');
+$('import-merge').onclick = () => applyImport('merge');
+$('import-cancel').onclick = () => { pendingImport = null; $('import-sheet').hidden = true; };
+$('import-sheet').onclick = e => {
+  if (e.target.id === 'import-sheet') { pendingImport = null; $('import-sheet').hidden = true; }
+};
+
+/* past day viewer */
+$('day-cancel').onclick = () => { $('day-sheet').hidden = true; };
+$('day-sheet').onclick = e => { if (e.target.id === 'day-sheet') $('day-sheet').hidden = true; };
+
+/* first-run card */
+function dismissOnboard() {
+  save(KEY.onboard, true);
+  $('onboard').hidden = true;
+}
+$('onboard-done').onclick = dismissOnboard;
+$('onboard-equip').onclick = () => {
+  dismissOnboard();
+  document.querySelector('.tabbar button[data-view="settings"]').click();
+};
+$('onboard').hidden = !!load(KEY.onboard, false);
 
 $('export-btn').onclick = () => {
   const blob = new Blob([JSON.stringify({ settings, logs, weights, overrides, body, maxes }, null, 2)], { type: 'application/json' });
