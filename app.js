@@ -84,14 +84,26 @@ function targetFor(item, beforeKey) {
   if (!range) return null;
   const history = performanceHistory(item.ex.id, beforeKey, Engine.STALL_SESSIONS + 2);
   const last = history[0];
-  if (!last) return null;
+  const step = Engine.loadStep(settings.units, item.ex);
+
+  if (!last) {
+    // never done this lift — seed a starting weight from a recorded max
+    const seed = item.ex.load
+      ? Engine.startingWeight(maxes[item.ex.id], range, settings.units, item.ex)
+      : null;
+    return seed != null
+      ? { last: null, range, prog: { weight: seed, advance: false, reason: 'seed', reps: [] } }
+      : null;
+  }
 
   if (!item.ex.load || last.weight == null) {
     if (!last.reps.length) return null;
-    return { last, range, prog: { weight: null, advance: false, reason: 'bodyweight', reps: last.reps } };
+    const goal = Engine.repTarget(last, range, item.sets);
+    return { last, range, prog: { weight: null, advance: false, reason: 'bodyweight', reps: last.reps, goal } };
   }
   const holds = Engine.countHolds(history, range, item.sets);
-  const prog = Engine.progression(last, range, Engine.loadStep(settings.units), item.sets, holds);
+  let prog = Engine.progression(last, range, step, item.sets, holds);
+  if (prog) prog = Engine.staleAdjust(prog, dayNumber(beforeKey) - dayNumber(last.key), step);
   return prog ? { last, range, prog } : null;
 }
 
@@ -250,21 +262,39 @@ function renderToday() {
     top.appendChild(swap);
     card.appendChild(top);
 
-    /* What happened last time, and whether that earns more weight today. */
+    /* What happened last time, and what today should aim for. */
     const target = targetFor(item, key);
     if (target) {
       const { last, prog } = target;
-      const when = keyToDate(last.key).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      const load = last.weight != null ? esc(last.weight) + ' ' + settings.units + ' × ' : '';
       const line = document.createElement('div');
       line.className = 'ex-last' + (prog.advance ? ' advance' : '');
-      line.innerHTML =
-        '<span class="last-label">' + esc(when) + ': ' + load + esc(prog.reps.join('·')) + '</span>' +
-        (prog.advance
-          ? '<span class="last-cta">try ' + prog.weight + ' ' + settings.units + '</span>'
-          : prog.reason === 'deload'
-            ? '<span class="last-cta deload">stalled — drop to ' + prog.weight + ' ' + settings.units + '</span>'
-            : '');
+
+      let label, cta = '';
+      if (!last) {
+        // no history — seeded from a recorded max
+        label = 'from your ' + esc(item.ex.name) + ' max';
+        cta = '<span class="last-cta">start around ' + prog.weight + ' ' + settings.units + '</span>';
+      } else {
+        const when = keyToDate(last.key).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const load = last.weight != null ? esc(last.weight) + ' ' + settings.units + ' × ' : '';
+        label = esc(when) + ': ' + load + esc(prog.reps.join('·'));
+        if (prog.advance) {
+          cta = '<span class="last-cta">try ' + prog.weight + ' ' + settings.units + '</span>';
+        } else if (prog.reason === 'deload') {
+          cta = '<span class="last-cta deload">stalled — drop to ' + prog.weight + ' ' + settings.units + '</span>';
+        } else if (prog.reason === 'stale') {
+          cta = '<span class="last-cta deload">been a while — start at ' + prog.weight + ' ' + settings.units + '</span>';
+        } else if (prog.goal && prog.goal.reason === 'add-rep') {
+          cta = '<span class="last-cta">aim for ' + prog.goal.target + '</span>';
+        } else if (prog.goal && prog.goal.reason === 'top-out') {
+          const h = item.ex.harder && exById(item.ex.harder);
+          const usable = h && h.equip.every(c => settings.equip[c]);
+          cta = usable
+            ? '<span class="last-cta">ready for ' + esc(h.name) + '</span>'
+            : '<span class="last-cta">topped out — slow the reps down</span>';
+        }
+      }
+      line.innerHTML = '<span class="last-label">' + label + '</span>' + cta;
       card.appendChild(line);
     }
 
@@ -272,7 +302,7 @@ function renderToday() {
        weight is known to ramp toward */
     if (item.ramp) {
       const workW = parseFloat(rec.weights[item.ex.id] || (target && target.prog.weight) || weights[item.ex.id]);
-      const ramp = Engine.rampSets(workW, settings.units);
+      const ramp = Engine.rampSets(workW, settings.units, item.ex);
       if (ramp.length) {
         const rl = document.createElement('div');
         rl.className = 'ex-ramp';
@@ -586,9 +616,76 @@ function openLiftPicker() {
   $('lift-sheet').hidden = false;
 }
 
+/* ======================= lift trends ======================= */
+
+/* One point per session for a lift, valued at the Epley estimate of its top
+   logged set — reps count, so 155×8 charts higher than 155×6 — falling back
+   to the raw weight when reps were not logged. */
+function liftSeries(exId) {
+  const pts = [];
+  for (const [k, r] of Object.entries(logs)) {
+    const w = r && r.weights ? parseFloat(r.weights[exId]) : NaN;
+    if (!isFinite(w) || w <= 0) continue;
+    const reps = ((r.reps && r.reps[exId]) || []).filter(n => Number.isFinite(n) && n > 0);
+    const top = reps.length ? Math.max(...reps) : 0;
+    pts.push([k, (top && e1rm(w, top)) || w]);
+  }
+  return pts.sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+function sparkSvg(pts, W, H) {
+  const PAD = 3;
+  const xs = pts.map(([k]) => dayNumber(k));
+  const ys = pts.map(([, v]) => v);
+  const x0 = Math.min(...xs), spanX = (Math.max(...xs) - x0) || 1;
+  const y0 = Math.min(...ys), spanY = (Math.max(...ys) - y0) || 1;
+  const px = x => PAD + ((x - x0) / spanX) * (W - PAD * 2);
+  const py = y => H - PAD - ((y - y0) / spanY) * (H - PAD * 2);
+  const line = pts.map(([k, v], i) =>
+    (i ? 'L' : 'M') + px(dayNumber(k)).toFixed(1) + ' ' + py(v).toFixed(1)).join(' ');
+  const last = pts[pts.length - 1];
+  return '<svg class="spark lift-spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true">' +
+    '<path class="sp-line" d="' + line + '"/>' +
+    '<circle class="sp-dot" cx="' + px(dayNumber(last[0])).toFixed(1) + '" cy="' + py(last[1]).toFixed(1) + '" r="2.5"/>' +
+    '</svg>';
+}
+
+function renderLiftTrends() {
+  const list = $('lift-trend-list');
+  list.innerHTML = '';
+  const cutoff = dayNumber(today()) - 90;
+  const rows = Object.keys(weights)
+    .map(id => [exById(id), liftSeries(id).filter(([k]) => dayNumber(k) >= cutoff)])
+    .filter(([e, pts]) => e && e.load && pts.length >= 2)
+    // most recently trained first
+    .sort((a, b) => b[1][b[1].length - 1][0].localeCompare(a[1][a[1].length - 1][0]))
+    .slice(0, 8);
+
+  if (!rows.length) {
+    list.innerHTML = '<li class="empty">Log a lift with a weight on two different days and its trend shows up here.</li>';
+    return;
+  }
+  for (const [ex, pts] of rows) {
+    const latest = pts[pts.length - 1][1];
+    const diff = Math.round(latest - pts[0][1]);
+    const sign = diff > 0 ? '+' : diff < 0 ? '−' : '±';
+    const li = document.createElement('li');
+    li.className = 'lift-trend';
+    li.innerHTML =
+      '<span class="max-main">' +
+        '<span class="max-name">' + esc(ex.name) + '</span>' +
+        '<span class="max-sub">' + sign + Math.abs(diff) + ' ' + settings.units + ' over ' + pts.length + ' sessions</span>' +
+      '</span>' +
+      sparkSvg(pts, 96, 30) +
+      '<span class="lift-now">~' + Math.round(latest) + '</span>';
+    list.appendChild(li);
+  }
+}
+
 function renderHistory() {
   renderBodyweight();
   renderMaxes();
+  renderLiftTrends();
   const done = Object.entries(logs).filter(([, v]) => v.complete);
   $('stat-streak').textContent = streak();
   $('stat-total').textContent = done.length;

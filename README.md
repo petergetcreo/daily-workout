@@ -84,14 +84,27 @@ sessions at the same load without hitting the top of the window and the
 suggestion becomes a ~10% drop (rounded to plate math) to rebuild from —
 double progression is only self-correcting if it has an exit.
 
-Two deliberate restraints:
+**Stale history never pushes weight.** A suggestion computed from a session
+more than four weeks back (a rotated-out block, a vacation) repeats the old
+load instead of advancing; past eight weeks it knocks the load down a notch.
+
+**Bodyweight movements progress by reps, then by variation.** Below the top of
+the window the card suggests one rep past your weakest set; top out every set
+and it points at the next variation up (push-up → decline push-up → pike
+push-up), when your equipment allows it.
+
+**A recorded max seeds new lifts.** The first time a lift with no history
+appears, if you have a max recorded for it, the card suggests a conservative
+starting weight (inverted Epley at the top of the rep window, rounded down).
+
+**Load steps match the equipment.** Free weights step 5 lb / 2.5 kg (dumbbells
+are logged per hand); cable movements step double, matching real stacks.
+
+One deliberate restraint:
 
 - An **unfinished session never earns an increase**. Logging one strong set and
   walking away would otherwise ratchet the suggested load up off work that
   never happened.
-- **Bodyweight movements show history but no suggestion.** When you top out the
-  rep range on push-ups the next step is a harder variation, which is a
-  judgement call rather than arithmetic.
 
 ## Tracking
 
@@ -120,6 +133,11 @@ Note that a max and a *last working weight* are different things and the app
 tracks both: the max is your best ever, the working weight is simply what you
 loaded most recently, and it appears as the placeholder in the weight field
 next time that lift comes up.
+
+**Lift trends** (Progress tab) — a 90-day sparkline per lift, valued at the
+Epley estimate of each session's top set (so 155 × 8 charts higher than
+155 × 6), with the change across the window. Shows the eight most recently
+trained lifts that have at least two logged sessions.
 
 ## Using it
 
@@ -169,11 +187,12 @@ direction — the engine should never reach back into the UI.
 npm test          # or: node --test test/engine.test.js
 ```
 
-62 tests covering library integrity, the rotation, plan generation across five
+72 tests covering library integrity, the rotation, plan generation across five
 equipment setups × three session lengths × a full year of dates, determinism,
 training blocks, reroll behaviour, short-session slot rotation, warm-up and
 finisher steering, ramp-up sets, local-vs-UTC date handling, rep-range parsing,
-progression and deload rules, and the 1RM math.
+progression, deload and staleness rules, bodyweight rep targets, max-seeded
+starting weights, and the 1RM math.
 
 The suite has been mutation-tested — deliberately breaking the primary-slot
 preference, the date handling, the Epley formula, reroll determinism, the

@@ -187,6 +187,26 @@ li.done .tick, .set.done { border-color: var(--good); background: var(--good); c
   margin-right: 8px;
 }
 
+/* lift trend rows: name + delta, sparkline, latest estimate */
+.lift-trend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lift-trend .max-main { flex: 1; min-width: 0; }
+.lift-spark {
+  width: 96px;
+  height: 30px;
+  flex: none;
+}
+.lift-now {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  min-width: 44px;
+  text-align: right;
+}
+
 .ex-bottom {
   display: flex;
   align-items: center;

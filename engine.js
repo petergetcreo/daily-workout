@@ -323,18 +323,60 @@
   }
 
   /* Smallest jump worth making. Plate math in pounds bottoms out at 5 (a pair
-     of 2.5s); in kilos, 2.5 (a pair of 1.25s). */
-  function loadStep(units) {
-    return units === 'kg' ? 2.5 : 5;
+     of 2.5s); in kilos, 2.5 (a pair of 1.25s). Dumbbell loads are logged per
+     hand, so the same step applies. Cable stacks move in coarser jumps —
+     roughly double the free-weight step. */
+  function loadStep(units, ex) {
+    const base = units === 'kg' ? 2.5 : 5;
+    if (ex && Array.isArray(ex.equip) && ex.equip.includes('cable')) return base * 2;
+    return base;
+  }
+
+  /* Bodyweight progression: there is no load to add, so the target is reps.
+     Below the top of the window, aim one rep past the weakest set from last
+     time. At the top of the window on every prescribed set, the movement is
+     outgrown — callers should point at the library's `harder` variation. */
+  function repTarget(last, range, minSets) {
+    if (!last || !range) return null;
+    const reps = Array.isArray(last.reps) ? last.reps.filter(r => Number.isFinite(r) && r > 0) : [];
+    if (!reps.length) return null;
+    const need = (Number.isFinite(minSets) && minSets > 0) ? minSets : 1;
+    if (reps.length >= need && reps.every(r => r >= range.hi)) return { reason: 'top-out' };
+    return { reason: 'add-rep', target: Math.min(range.hi, Math.min(...reps) + 1) };
+  }
+
+  /* History goes stale. A suggestion computed from a session more than four
+     weeks back — a rotated-out block, a vacation — must not push the weight
+     on: repeat the old load instead, and past eight weeks knock it down a
+     notch. Applied on top of progression()'s output. */
+  const STALE_DAYS = 28;
+  function staleAdjust(prog, gapDays, step) {
+    if (!prog || prog.weight == null) return prog;
+    if (!Number.isFinite(gapDays) || gapDays <= STALE_DAYS) return prog;
+    const lastW = prog.advance ? Math.round((prog.weight - step) * 10) / 10 : prog.weight;
+    const weight = gapDays > STALE_DAYS * 2 ? deloadWeight(lastW, step) : lastW;
+    return { weight, advance: false, reason: 'stale', reps: prog.reps, gapDays };
+  }
+
+  /* First session of a lift with no history but a recorded max: invert Epley
+     to the load repeatable at the top of the rep window, rounded DOWN to
+     plate math — a first session should start under the estimate, not over. */
+  function startingWeight(maxEntry, range, units, ex) {
+    if (!maxEntry || !range) return null;
+    const est = e1rm(maxEntry.weight, maxEntry.reps);
+    if (!est) return null;
+    const step = loadStep(units, ex);
+    const w = Math.floor((est / (1 + range.hi / 30)) / step) * step;
+    return w >= step ? w : null;
   }
 
   /* Ramp-up sets before the day's first heavy compound: ascending sets at
      ~50% and ~75% of the working load, rounded to plate math, before jumping
      into work sets. Trivial loads get no ramp — there is nothing to warm up
      to under an empty-bar's worth of weight. */
-  function rampSets(weight, units) {
+  function rampSets(weight, units, ex) {
     const w = parseFloat(weight);
-    const step = loadStep(units);
+    const step = loadStep(units, ex);
     if (!isFinite(w) || w <= step * 2) return [];
     const at = pct => Math.max(step, Math.round((w * pct) / step) * step);
     const out = [];
@@ -373,9 +415,10 @@
     dateKey, dayNumber, keyToDate, blockFor,
     focusForDate, buildPlan, estimateMinutes,
     repRange, progression, countHolds, loadStep, rampSets,
+    repTarget, staleAdjust, startingWeight,
     maxableLifts, e1rm, exerciseById,
     // exposed for tests and for anything that needs to reason about slots
     SLOT_FALLBACK, PRIMARY_SLOTS, FOCUS_BIAS, FOCUS_AVOID,
-    BLOCK_DAYS, STALL_SESSIONS,
+    BLOCK_DAYS, STALL_SESSIONS, STALE_DAYS,
   };
 }));

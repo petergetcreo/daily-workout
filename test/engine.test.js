@@ -675,6 +675,11 @@ test('load step matches the smallest real plate jump', () => {
   assert.strictEqual(Engine.loadStep('lb'), 5);
   assert.strictEqual(Engine.loadStep('kg'), 2.5);
   assert.strictEqual(Engine.loadStep(undefined), 5, 'defaults to pounds');
+  // free weights step at the base; cable stacks jump roughly double
+  assert.strictEqual(Engine.loadStep('lb', Engine.exerciseById('bb-bench')), 5);
+  assert.strictEqual(Engine.loadStep('lb', Engine.exerciseById('db-row')), 5);
+  assert.strictEqual(Engine.loadStep('lb', Engine.exerciseById('cable-fly')), 10);
+  assert.strictEqual(Engine.loadStep('kg', Engine.exerciseById('cable-row')), 5);
 });
 
 test('a kilo progression does not produce unloadable fractions', () => {
@@ -768,6 +773,106 @@ test('a deload always lands strictly below the stalled weight', () => {
     const p = Engine.progression({ weight: w, reps: [7, 7, 7] }, range, 2.5, 3, 3);
     assert.ok(p.weight < w, `deload from ${w} kg suggested ${p.weight}, not a reduction`);
   }
+});
+
+/* ---------- bodyweight rep targets ---------- */
+
+test('below the top of the window, the target is one rep past the weakest set', () => {
+  const range = { lo: 6, hi: 8 };
+  let t = Engine.repTarget({ reps: [7, 6, 8] }, range, 3);
+  assert.deepStrictEqual(t, { reason: 'add-rep', target: 7 });
+  // never target past the top of the window
+  t = Engine.repTarget({ reps: [8] }, range, 3);
+  assert.deepStrictEqual(t, { reason: 'add-rep', target: 8 }, 'incomplete session still gets a rep goal');
+});
+
+test('topping the window on every prescribed set means the movement is outgrown', () => {
+  const range = { lo: 6, hi: 8 };
+  assert.deepStrictEqual(Engine.repTarget({ reps: [8, 8, 8] }, range, 3), { reason: 'top-out' });
+  // one short set is not a top-out
+  assert.strictEqual(Engine.repTarget({ reps: [8, 8, 7] }, range, 3).reason, 'add-rep');
+});
+
+test('repTarget refuses junk', () => {
+  const range = { lo: 6, hi: 8 };
+  assert.strictEqual(Engine.repTarget(null, range, 3), null);
+  assert.strictEqual(Engine.repTarget({ reps: [] }, range, 3), null);
+  assert.strictEqual(Engine.repTarget({ reps: [8, 8] }, null, 3), null);
+});
+
+test('harder pointers reference real, unloaded movements in the same category', () => {
+  const PRIMARY = ['push', 'pull', 'legs'];
+  const cat = ex => new Set(ex.slots.map(s => SLOT_CATEGORY[s]).filter(c => PRIMARY.includes(c)));
+  const tagged = EXERCISES.filter(e => e.harder);
+  assert.ok(tagged.length >= 4, 'suspiciously few harder pointers: ' + tagged.length);
+  for (const e of tagged) {
+    const h = EXERCISES.find(x => x.id === e.harder);
+    assert.ok(h, e.id + ' points at unknown harder variation ' + e.harder);
+    assert.notStrictEqual(h.id, e.id, e.id + ' points at itself');
+    assert.strictEqual(e.load, false, e.id + ' is loaded; progression should add weight, not variations');
+    const a = [...cat(e)], b = [...cat(h)];
+    if (a.length && b.length) {
+      assert.deepStrictEqual(b, a, e.id + ' escalates into a different muscle category');
+    }
+    // the chain must terminate
+    let cur = h, hops = 0;
+    while (cur && cur.harder && hops++ < 10) cur = EXERCISES.find(x => x.id === cur.harder);
+    assert.ok(hops < 10, 'harder chain from ' + e.id + ' does not terminate');
+  }
+});
+
+/* ---------- stale history ---------- */
+
+test('fresh history passes through staleAdjust untouched', () => {
+  const prog = { weight: 160, advance: true, reason: 'hit-top', reps: [8, 8, 8] };
+  assert.deepStrictEqual(Engine.staleAdjust(prog, Engine.STALE_DAYS, 5), prog);
+  assert.deepStrictEqual(Engine.staleAdjust(prog, 3, 5), prog);
+  assert.strictEqual(Engine.staleAdjust(null, 60, 5), null);
+});
+
+test('a month-old session repeats its load instead of advancing', () => {
+  const prog = { weight: 160, advance: true, reason: 'hit-top', reps: [8, 8, 8] };
+  const adj = Engine.staleAdjust(prog, Engine.STALE_DAYS + 1, 5);
+  assert.strictEqual(adj.advance, false);
+  assert.strictEqual(adj.reason, 'stale');
+  assert.strictEqual(adj.weight, 155, 'should undo the advance back to the last real load');
+});
+
+test('a two-month-old session knocks the load down a notch', () => {
+  const prog = { weight: 155, advance: false, reason: 'hold', reps: [7, 7, 7] };
+  const adj = Engine.staleAdjust(prog, Engine.STALE_DAYS * 2 + 1, 5);
+  assert.strictEqual(adj.reason, 'stale');
+  assert.strictEqual(adj.weight, 140, '155 after a long layoff should restart around 140');
+});
+
+test('bodyweight progressions have no load for staleness to touch', () => {
+  const prog = { weight: null, advance: false, reason: 'bodyweight', reps: [8, 8] };
+  assert.deepStrictEqual(Engine.staleAdjust(prog, 90, 5), prog);
+});
+
+/* ---------- starting weights from maxes ---------- */
+
+test('a recorded max seeds a conservative starting weight for a new lift', () => {
+  const range = { lo: 6, hi: 8 };
+  // 225x3 -> e1RM 248 -> repeatable for 8 ≈ 195.8 -> floor to plate math
+  assert.strictEqual(Engine.startingWeight({ weight: 225, reps: 3 }, range, 'lb'), 195);
+  // kg rounds down on the 2.5 grid
+  assert.strictEqual(Engine.startingWeight({ weight: 100, reps: 5 }, range, 'kg'), 90);
+  // a cable lift rounds down on its coarser stack
+  assert.strictEqual(
+    Engine.startingWeight({ weight: 225, reps: 3 }, range, 'lb', Engine.exerciseById('cable-row')),
+    190);
+});
+
+test('startingWeight refuses to guess without usable inputs', () => {
+  const range = { lo: 6, hi: 8 };
+  assert.strictEqual(Engine.startingWeight(null, range, 'lb'), null);
+  assert.strictEqual(Engine.startingWeight({ weight: 225, reps: 3 }, null, 'lb'), null);
+  assert.strictEqual(Engine.startingWeight({ weight: 225, reps: 13 }, range, 'lb'), null,
+    'a max above 12 reps has no reliable e1RM to seed from');
+  assert.strictEqual(Engine.startingWeight({ weight: 'big', reps: 3 }, range, 'lb'), null);
+  assert.strictEqual(Engine.startingWeight({ weight: 4, reps: 1 }, range, 'lb'), null,
+    'a seed below one plate step is not a suggestion');
 });
 
 /* ---------- maxes ---------- */

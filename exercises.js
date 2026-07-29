@@ -10,6 +10,11 @@
 
    An exercise is eligible only if EVERY code in `equip` is switched on
    in settings. Slots drive placement inside a workout.
+
+   Dumbbell loads are logged PER HAND (a pair of 50s is "50").
+
+   `harder` on a bodyweight movement names the next variation up, for when
+   the rep window tops out and adding reps stops being progression.
 */
 
 const EXERCISES = [
@@ -20,11 +25,11 @@ const EXERCISES = [
   { id: 'bb-ohp',        name: 'Barbell Overhead Press',     slots: ['push_main', 'push_second'],   equip: ['bar'],          type: 'compound',  load: true,  cue: 'Squeeze glutes, ribs down, head through at lockout.' },
   { id: 'db-ohp',        name: 'Dumbbell Shoulder Press',    slots: ['push_main', 'push_second'],   equip: ['db'],           type: 'compound',  load: true,  cue: 'Seated or standing. No lower-back arch.' },
   { id: 'db-floor',      name: 'Dumbbell Floor Press',       slots: ['push_main', 'push_second'],   equip: ['db'],           type: 'compound',  load: true,  cue: 'No bench needed. Triceps touch the floor, then drive.' },
-  { id: 'pushup',        name: 'Push-Up',                    slots: ['push_main', 'push_second', 'fb_push'], equip: ['bw'], type: 'compound',  load: false, cue: 'Straight line ears to heels. Elbows ~45°.' },
+  { id: 'pushup',        name: 'Push-Up',                    slots: ['push_main', 'push_second', 'fb_push'], equip: ['bw'], type: 'compound',  load: false, harder: 'decline-pushup', cue: 'Straight line ears to heels. Elbows ~45°.' },
   { id: 'pushup-deficit',name: 'Deficit Push-Up',            slots: ['push_second', 'push_acc'],    equip: ['bw', 'db'],     type: 'accessory', load: false, cue: 'Hands on the dumbbells, chest sinks below them.' },
   { id: 'pike-pushup',   name: 'Pike Push-Up',               slots: ['push_second', 'push_acc'],    equip: ['bw'],           type: 'accessory', load: false, cue: 'Hips high, crown of head to the floor.' },
-  { id: 'bench-dip',     name: 'Bench Dip',                  slots: ['push_acc', 'triceps'],        equip: ['bw', 'bench'],  type: 'accessory', load: false, cue: 'Elbows back, not flared. Stop at 90°.' },
-  { id: 'decline-pushup',name: 'Decline Push-Up',            slots: ['push_second', 'push_acc'],    equip: ['bw'],           type: 'compound',  load: false, cue: 'Feet up on a chair or step. Hits the upper chest.' },
+  { id: 'bench-dip',     name: 'Bench Dip',                  slots: ['push_acc', 'triceps'],        equip: ['bw', 'bench'],  type: 'accessory', load: false, harder: 'diamond-pushup', cue: 'Elbows back, not flared. Stop at 90°.' },
+  { id: 'decline-pushup',name: 'Decline Push-Up',            slots: ['push_second', 'push_acc'],    equip: ['bw'],           type: 'compound',  load: false, harder: 'pike-pushup', cue: 'Feet up on a chair or step. Hits the upper chest.' },
   { id: 'diamond-pushup',name: 'Diamond Push-Up',            slots: ['triceps', 'push_acc'],        equip: ['bw'],           type: 'accessory', load: false, cue: 'Index fingers and thumbs touching. Elbows brush the ribs.' },
   { id: 'cable-fly',     name: 'Cable Chest Fly',            slots: ['push_acc'],                   equip: ['cable'],        type: 'accessory', load: true,  cue: 'Soft elbows, one arm at a time if single cable.' },
   { id: 'db-lateral',    name: 'Dumbbell Lateral Raise',     slots: ['push_acc'],                   equip: ['db'],           type: 'iso',       load: true,  cue: 'Lead with the elbows. Light weight, no swing.' },
@@ -39,7 +44,7 @@ const EXERCISES = [
   { id: 'bb-row',        name: 'Bent-Over Barbell Row',      slots: ['pull_horiz'],                 equip: ['bar'],          type: 'compound',  load: true,  cue: 'Torso ~45°, pull to the belly button.' },
   { id: 'db-row',        name: 'One-Arm Dumbbell Row',       slots: ['pull_horiz', 'fb_pull'],      equip: ['db', 'bench'],  type: 'compound',  load: true,  cue: 'Flat back, drive the elbow past your ribs.' },
   { id: 'cable-row',     name: 'Cable Row',                  slots: ['pull_horiz', 'fb_pull'],      equip: ['cable'],        type: 'compound',  load: true,  cue: 'Chest tall, squeeze the shoulder blades at the end.' },
-  { id: 'inverted-row',  name: 'Inverted Row',               slots: ['pull_horiz', 'fb_pull'],      equip: ['bar'],          type: 'compound',  load: false, cue: 'Bar set low in the rack. Body rigid, chest to bar.' },
+  { id: 'inverted-row',  name: 'Inverted Row',               slots: ['pull_horiz', 'fb_pull'],      equip: ['bar'],          type: 'compound',  load: false, harder: 'pullup', cue: 'Bar set low in the rack. Body rigid, chest to bar.' },
   { id: 'pullup',        name: 'Pull-Up',                    slots: ['pull_vert', 'fb_pull'],       equip: ['bar'],          type: 'compound',  load: false, cue: 'Rack pull-up bar. Chin over, controlled down.' },
   { id: 'chinup',        name: 'Chin-Up',                    slots: ['pull_vert', 'biceps'],        equip: ['bar'],          type: 'compound',  load: false, cue: 'Underhand grip. Slow 3-count lowering.' },
   { id: 'cable-pulldown',name: 'Cable Lat Pulldown',         slots: ['pull_vert', 'fb_pull'],       equip: ['cable'],        type: 'compound',  load: true,  cue: 'Cable high, kneel if needed. Elbows to hips.' },
@@ -48,7 +53,7 @@ const EXERCISES = [
   { id: 'db-rear-fly',   name: 'Dumbbell Rear Delt Fly',     slots: ['pull_acc'],                   equip: ['db'],           type: 'iso',       load: true,  cue: 'Hinge forward, light bells, pinkies up.' },
   { id: 'db-shrug',      name: 'Dumbbell Shrug',             slots: ['pull_acc'],                   equip: ['db'],           type: 'iso',       load: true,  cue: 'Straight up, one-second squeeze at the top.' },
   { id: 'kb-high-pull',  name: 'Kettlebell High Pull',       slots: ['pull_acc'],                   equip: ['db'],           type: 'accessory', load: true,  cue: 'Hips snap first, the arm just follows.' },
-  { id: 'table-row',     name: 'Table Row',                  slots: ['pull_horiz', 'fb_pull'],      equip: ['bw'],           type: 'accessory', load: false, cue: 'Under a sturdy table, heels out. Chest to the edge.' },
+  { id: 'table-row',     name: 'Table Row',                  slots: ['pull_horiz', 'fb_pull'],      equip: ['bw'],           type: 'accessory', load: false, harder: 'inverted-row', cue: 'Under a sturdy table, heels out. Chest to the edge.' },
   { id: 'superman',      name: 'Superman Hold',              slots: ['pull_acc', 'core'],           equip: ['bw'],           type: 'core',      load: false, cue: 'Lift chest and thighs, reach long. Do not crank the neck.' },
   { id: 'prone-ytw',     name: 'Prone Y-T-W Raise',          slots: ['pull_acc'],                   equip: ['bw'],           type: 'iso',       load: false, cue: 'Face down, thumbs up. 8 reps in each letter position.' },
   { id: 'db-curl',       name: 'Dumbbell Curl',              slots: ['biceps'],                     equip: ['db'],           type: 'iso',       load: true,  cue: 'No elbow drift. Squeeze at the top.' },
@@ -60,7 +65,7 @@ const EXERCISES = [
   { id: 'bb-squat',      name: 'Back Squat',                 slots: ['squat', 'fb_lower'],          equip: ['bar'],          type: 'compound',  load: true,  cue: 'Brace hard, knees track over the toes, hit depth.' },
   { id: 'bb-front-squat',name: 'Front Squat',                slots: ['squat'],                      equip: ['bar'],          type: 'compound',  load: true,  cue: 'Elbows high, upright torso.' },
   { id: 'goblet-squat',  name: 'Goblet Squat',               slots: ['squat', 'fb_lower'],          equip: ['db'],           type: 'compound',  load: true,  cue: 'Bell at the chest, elbows inside the knees at the bottom.' },
-  { id: 'bw-squat',      name: 'Bodyweight Squat',           slots: ['squat', 'fb_lower'],          equip: ['bw'],           type: 'accessory', load: false, cue: 'Slow 3 seconds down, explode up.' },
+  { id: 'bw-squat',      name: 'Bodyweight Squat',           slots: ['squat', 'fb_lower'],          equip: ['bw'],           type: 'accessory', load: false, harder: 'reverse-lunge', cue: 'Slow 3 seconds down, explode up.' },
   { id: 'bb-rdl',        name: 'Barbell Romanian Deadlift',  slots: ['hinge', 'fb_lower'],          equip: ['bar'],          type: 'compound',  load: true,  cue: 'Push the hips back, bar shaves the thighs.' },
   { id: 'db-rdl',        name: 'Dumbbell Romanian Deadlift', slots: ['hinge', 'fb_lower'],          equip: ['db'],           type: 'compound',  load: true,  cue: 'Flat back. Stop when the hamstrings say stop.' },
   { id: 'kb-swing',      name: 'Kettlebell Swing',           slots: ['hinge', 'fb_lower', 'cardio'],equip: ['db'],           type: 'compound',  load: true,  cue: 'Hip snap, not a squat. Bell floats to chest height.' },
