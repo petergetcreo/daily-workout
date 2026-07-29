@@ -440,6 +440,41 @@ button { font-family: inherit; cursor: pointer; }
 /* past-day sheet list can get long */
 #day-sheet-list { max-height: 45vh; overflow-y: auto; margin-bottom: 4px; }
 
+/* profile fields */
+.field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 13px 15px;
+  margin-bottom: 10px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.field input {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 400;
+}
+.field input::placeholder { color: var(--muted); }
+
+/* heart-rate hint on conditioning */
+.hr-hint {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
 /* goals */
 .goal-tag {
   font-size: 11px;

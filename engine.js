@@ -38,10 +38,24 @@
 
   /* Training blocks. Primary lifts hold steady for a whole block — double
      progression only bites when the same lift shows up week after week — and
-     rotate when the block turns over. Accessories still vary day to day. */
+     rotate when the block turns over. Accessories still vary day to day.
+
+     Experience sets the block length: a new lifter needs repetition to learn
+     the lifts, a seasoned one has earned the variety. */
   const BLOCK_DAYS = 21;
-  function blockFor(key) {
-    return Math.floor(dayNumber(key) / BLOCK_DAYS);
+  const EXPERIENCE_BLOCKS = { new: 28, regular: 21, seasoned: 14 };
+  function blockFor(key, days) {
+    return Math.floor(dayNumber(key) / (days || BLOCK_DAYS));
+  }
+
+  /* Heart-rate guidance for conditioning, from the plain 220-minus-age
+     estimate. Rough, but rough is what a phone can offer without a strap. */
+  function hrZones(age) {
+    const a = parseInt(age, 10);
+    if (!Number.isFinite(a) || a < 10 || a > 100) return null;
+    const max = 220 - a;
+    const z = p => Math.round(max * p);
+    return { max, easy: [z(0.6), z(0.7)], hard: [z(0.8), z(0.9)] };
   }
 
   /* ---------------- deterministic randomness ---------------- */
@@ -172,6 +186,8 @@
     const ov = override || {};
     const equip = settings.equip;
     const len = settings.length;
+    const prof = settings.profile || {};
+    const blockDays = EXPERIENCE_BLOCKS[prof.experience] || BLOCK_DAYS;
     // callers pass ACTIVE goals only; sorted so pinning order is stable
     const goalIds = goals ? Object.keys(goals).sort() : [];
     const focusId = focusForDate(key, ov);
@@ -219,7 +235,7 @@
         // Re-rolling walks deterministically through a shuffled view of the
         // pool. Primary slots seed from the training block, not the date, so
         // the same heavy lifts recur all block and progression has grip.
-        const seed = (sticky ? 'b' + blockFor(key) : key) + '|' + slot + '|' + i;
+        const seed = (sticky ? 'b' + blockFor(key, blockDays) : key) + '|' + slot + '|' + i;
         const start = seededIndex(seed, pool.length);
         ex = pool[(start + roll) % pool.length];
       }
@@ -238,19 +254,23 @@
     });
 
     /* warm-up: three movements, leaning toward the half of the body the day
-       trains, topped up from the full pool if the biased one runs dry */
+       trains, topped up from the full pool if the biased one runs dry.
+       Past fifty, cold starts cost more: a fourth movement and longer doses. */
+    const older = Number.isFinite(parseInt(prof.age, 10)) && parseInt(prof.age, 10) >= 50;
+    const warmCount = older ? 4 : 3;
+    const warmDose = older ? '40 sec' : '30 sec';
     const bias = FOCUS_BIAS[focusId] || 'full';
     const warmAll = EXERCISES.filter(e => e.slots.includes('warmup') && eligible(e, equip));
     const warmPool = bias === 'full' ? warmAll : warmAll.filter(e => e.bias === bias || e.bias === 'full');
     const warm = [];
     const wUsed = new Set();
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < warmCount; i++) {
       let p = warmPool.filter(e => !wUsed.has(e.id));
       if (!p.length) p = warmAll.filter(e => !wUsed.has(e.id));
       if (!p.length) break;
       const w = pick(p, key + '|warm|' + i);
       wUsed.add(w.id);
-      warm.push({ ex: w, dose: w.id === 'light-cardio' ? '3 min' : '30 sec' });
+      warm.push({ ex: w, dose: w.id === 'light-cardio' ? '3 min' : warmDose });
     }
 
     /* finisher — never one that hammers what the day already trained */
@@ -472,10 +492,10 @@
     dateKey, dayNumber, keyToDate, blockFor,
     focusForDate, buildPlan, estimateMinutes,
     repRange, progression, countHolds, loadStep, rampSets,
-    repTarget, staleAdjust, startingWeight, timedTarget,
+    repTarget, staleAdjust, startingWeight, timedTarget, hrZones,
     maxableLifts, e1rm, exerciseById,
     // exposed for tests and for anything that needs to reason about slots
     SLOT_FALLBACK, PRIMARY_SLOTS, FOCUS_BIAS, FOCUS_AVOID,
-    BLOCK_DAYS, STALL_SESSIONS, STALE_DAYS, GOAL_SCHEME,
+    BLOCK_DAYS, STALL_SESSIONS, STALE_DAYS, GOAL_SCHEME, EXPERIENCE_BLOCKS,
   };
 }));

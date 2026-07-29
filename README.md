@@ -106,6 +106,19 @@ One deliberate restraint:
   walking away would otherwise ratchet the suggested load up off work that
   never happened.
 
+## About you
+
+An optional profile (Settings → About you) that stays on the device. Every
+field earns its place by changing something:
+
+- **Name** — the Today header greets you by it, matched to the time of day.
+- **Age** — conditioning work and cardio finishers show heart-rate targets
+  (from the plain 220 − age estimate: easy ≈ 60–70%, hard ≈ 80–90%), and past
+  fifty the warm-up grows to four movements at 40 seconds each.
+- **Experience** — sets how long the heavy lifts stay in rotation: new to it =
+  4-week blocks (repetition to learn the lifts), regular = 3 weeks, seasoned =
+  2 weeks (earned variety).
+
 ## Goals
 
 Set a target on a lift (an estimated 1RM — "bench 250") or a bodyweight
@@ -216,8 +229,9 @@ direction — the engine should never reach back into the UI.
 npm test          # or: node --test test/engine.test.js
 ```
 
-82 tests covering library integrity, the rotation, goal pinning, plan
-generation across five
+85 tests covering library integrity, the rotation, goal pinning, profile
+effects (experience block lengths, age-scaled warm-ups, heart-rate zones),
+plan generation across five
 equipment setups × three session lengths × a full year of dates, determinism,
 training blocks, reroll behaviour, short-session slot rotation, warm-up and
 finisher steering, ramp-up sets, equipment gating (including the kettlebell

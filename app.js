@@ -20,6 +20,7 @@ const DEFAULT_SETTINGS = {
   length: 'standard',
   units: 'lb',
   equip: { bw: true, db: true, kb: true, bar: true, bench: true, cable: true, cardio: true },
+  profile: { name: '', age: null, experience: 'regular' },
 };
 
 function load(key, fallback) {
@@ -36,6 +37,7 @@ function save(key, val) {
 
 let settings  = Object.assign(structuredClone(DEFAULT_SETTINGS), load(KEY.settings, {}));
 settings.equip = Object.assign(structuredClone(DEFAULT_SETTINGS.equip), settings.equip || {});
+settings.profile = Object.assign(structuredClone(DEFAULT_SETTINGS.profile), settings.profile || {});
 let logs      = load(KEY.log, {});
 let weights   = load(KEY.weights, {});
 let overrides = load(KEY.overrides, {});
@@ -241,7 +243,15 @@ function renderToday() {
   const rec = record(key);
   const d = keyToDate(key);
 
-  $('hdr-date').textContent = d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+  const dateStr = d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+  const name = (settings.profile.name || '').trim();
+  if (name) {
+    const h = new Date().getHours();
+    const hello = h < 5 ? 'Up late' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening';
+    $('hdr-date').textContent = hello + ', ' + name + ' · ' + dateStr;
+  } else {
+    $('hdr-date').textContent = dateStr;
+  }
   $('hdr-focus').textContent = plan.focus.label;
   $('hdr-blurb').textContent = plan.focus.blurb;
   $('main-note').textContent = '~' + plan.minutes + ' min total';
@@ -261,6 +271,11 @@ function renderToday() {
   });
 
   /* main work */
+  const zones = Engine.hrZones(settings.profile.age);
+  const hrHint = zones
+    ? ' <span class="hr-hint">hard ≈ ' + zones.hard[0] + '–' + zones.hard[1] +
+      ' bpm · easy ≈ ' + zones.easy[0] + '–' + zones.easy[1] + '</span>'
+    : '';
   const ml = $('main-list');
   ml.innerHTML = '';
   plan.main.forEach(item => {
@@ -282,7 +297,9 @@ function renderToday() {
               esc(goalUnitLabel(goals[item.ex.id])) + '</span>'
             : '') +
         '</div>' +
-        '<div class="ex-cue">' + esc(item.ex.cue) + '</div>' +
+        '<div class="ex-cue">' + esc(item.ex.cue) +
+          (item.ex.type === 'cardio' || item.ex.type === 'interval' ? hrHint : '') +
+        '</div>' +
       '</div>' +
       '<div class="ex-dose">' + esc(dose) + '</div>';
     const swap = document.createElement('button');
@@ -446,7 +463,8 @@ function renderToday() {
     $('finisher-block').hidden = false;
     $('finisher').innerHTML =
       '<div class="finisher-name">' + esc(plan.finisher.name) + '</div>' +
-      '<div class="finisher-detail">' + esc(plan.finisher.detail) + '</div>';
+      '<div class="finisher-detail">' + esc(plan.finisher.detail) +
+        (plan.finisher.stress === 'cardio' ? hrHint : '') + '</div>';
   } else {
     $('finisher-block').hidden = true;
   }
@@ -1081,6 +1099,11 @@ const EQUIP_LABELS = [
 ];
 
 function renderSettings() {
+  const activeEl = document.activeElement;
+  if (activeEl !== $('prof-name')) $('prof-name').value = settings.profile.name || '';
+  if (activeEl !== $('prof-age')) $('prof-age').value = settings.profile.age != null ? settings.profile.age : '';
+  document.querySelectorAll('#seg-exp button').forEach(b =>
+    b.classList.toggle('on', b.dataset.val === (settings.profile.experience || 'regular')));
   document.querySelectorAll('#seg-length button').forEach(b =>
     b.classList.toggle('on', b.dataset.val === settings.length));
   document.querySelectorAll('#seg-units button').forEach(b =>
@@ -1279,6 +1302,28 @@ document.querySelectorAll('#seg-length button').forEach(b => {
     save(KEY.settings, settings);
     renderSettings();
     renderToday();
+  };
+});
+
+/* profile */
+$('prof-name').onchange = () => {
+  settings.profile.name = $('prof-name').value.trim().slice(0, 30);
+  save(KEY.settings, settings);
+  renderToday();
+};
+$('prof-age').onchange = () => {
+  const v = parseInt($('prof-age').value, 10);
+  settings.profile.age = (Number.isFinite(v) && v >= 10 && v <= 100) ? v : null;
+  save(KEY.settings, settings);
+  renderSettings();  // clears a rejected entry
+  renderToday();     // warm-up length and HR hints may change
+};
+document.querySelectorAll('#seg-exp button').forEach(b => {
+  b.onclick = () => {
+    settings.profile.experience = b.dataset.val;
+    save(KEY.settings, settings);
+    renderSettings();
+    renderToday();   // block length changes the primary picks
   };
 });
 /* ---- unit switching ---- */

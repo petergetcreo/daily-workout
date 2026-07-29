@@ -465,6 +465,66 @@ test('kettlebell movements require the kettlebell toggle, not dumbbells', () => 
   assert.ok(seen.has('kb-swing'), 'a kettlebell owner never got swings in 180 days');
 });
 
+/* ---------- profile ---------- */
+
+test('experience sets how long primary lifts stay pinned', () => {
+  assert.deepStrictEqual(Engine.EXPERIENCE_BLOCKS, { new: 28, regular: 21, seasoned: 14 });
+  // block boundaries move with the length
+  assert.strictEqual(Engine.blockFor('1970-01-15', 14), 1);
+  assert.strictEqual(Engine.blockFor('1970-01-15', 28), 0);
+
+  const base = settingsFor('garage', 'standard');
+  const mk = exp => Object.assign({}, base, { profile: { experience: exp } });
+  const distinctPrimaries = exp => {
+    const seen = new Set();
+    for (const key of datesFrom('2026-01-01', 84)) {
+      const plan = Engine.buildPlan(key, mk(exp));
+      if (plan.focusId !== 'push') continue;
+      seen.add(plan.main.filter(m => Engine.PRIMARY_SLOTS.has(m.slot)).map(m => m.ex.id).join());
+    }
+    return seen.size;
+  };
+  assert.ok(distinctPrimaries('seasoned') >= distinctPrimaries('new'),
+    'shorter blocks must rotate at least as often as longer ones');
+
+  // no profile behaves exactly like 'regular'
+  for (const key of datesFrom('2026-01-01', 21)) {
+    assert.deepStrictEqual(
+      Engine.buildPlan(key, mk('regular')).main.map(m => m.ex.id),
+      Engine.buildPlan(key, base).main.map(m => m.ex.id),
+      'regular differs from the default on ' + key);
+  }
+});
+
+test('warm-ups lengthen past fifty', () => {
+  const base = settingsFor('full', 'standard');
+  const young = Object.assign({}, base, { profile: { age: 30 } });
+  const older = Object.assign({}, base, { profile: { age: 55 } });
+  for (const key of datesFrom('2026-01-01', 14)) {
+    const y = Engine.buildPlan(key, young);
+    const o = Engine.buildPlan(key, older);
+    assert.strictEqual(y.warm.length, 3);
+    assert.strictEqual(o.warm.length, 4, key + ' older warm-up should add a movement');
+    for (const w of o.warm) {
+      if (w.ex.id !== 'light-cardio') assert.strictEqual(w.dose, '40 sec');
+    }
+    for (const w of y.warm) {
+      if (w.ex.id !== 'light-cardio') assert.strictEqual(w.dose, '30 sec');
+    }
+  }
+});
+
+test('heart-rate zones come from 220 minus age and refuse junk', () => {
+  assert.deepStrictEqual(Engine.hrZones(40), { max: 180, easy: [108, 126], hard: [144, 162] });
+  assert.deepStrictEqual(Engine.hrZones('40'), { max: 180, easy: [108, 126], hard: [144, 162] });
+  assert.deepStrictEqual(Engine.hrZones(64), { max: 156, easy: [94, 109], hard: [125, 140] });
+  assert.strictEqual(Engine.hrZones(null), null);
+  assert.strictEqual(Engine.hrZones(undefined), null);
+  assert.strictEqual(Engine.hrZones(9), null, 'implausibly young');
+  assert.strictEqual(Engine.hrZones(101), null, 'implausibly old');
+  assert.strictEqual(Engine.hrZones('nope'), null);
+});
+
 /* ---------- goals ---------- */
 
 test('a load goal pins its lift and trains it in a strength window', () => {

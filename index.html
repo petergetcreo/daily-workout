@@ -148,6 +148,24 @@
   <!-- ============ SETTINGS ============ -->
   <section id="view-settings" class="view">
     <div class="block">
+      <div class="block-head"><h2>About you</h2></div>
+      <p class="hint">Stays on this device. Name is for the greeting; age sets
+        heart-rate targets and warm-up length; experience sets how long the
+        heavy lifts stay in rotation before they change.</p>
+      <label class="field">Name
+        <input type="text" id="prof-name" autocomplete="off" maxlength="30" placeholder="optional">
+      </label>
+      <label class="field">Age
+        <input type="number" id="prof-age" inputmode="numeric" min="10" max="100" placeholder="optional">
+      </label>
+      <div class="seg" id="seg-exp">
+        <button data-val="new">New to it<small>4-week blocks</small></button>
+        <button data-val="regular">Regular<small>3-week blocks</small></button>
+        <button data-val="seasoned">Seasoned<small>2-week blocks</small></button>
+      </div>
+    </div>
+
+    <div class="block">
       <div class="block-head"><h2>Session length</h2></div>
       <div class="seg" id="seg-length">
         <button data-val="short">Short<small>10–15 min</small></button>
