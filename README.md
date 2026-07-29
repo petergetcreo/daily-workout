@@ -142,7 +142,12 @@ trained lifts that have at least two logged sessions.
 ## Using it
 
 - Tap a set number to log it — that starts the rest timer automatically, sized
-  to the movement (100s for compounds, 40s for core and intervals).
+  to the movement (100s for compounds, 40s for core and intervals). The timer
+  counts against the wall clock, so locking the phone can't freeze it, and it
+  holds a screen wake lock while running where the browser supports one.
+- Timed work (planks, carries, intervals) progresses by duration: complete
+  every prescribed set a few sessions running and the card suggests +5 seconds
+  per completed session, capped at +30.
 - Tap the last logged set again to un-log it.
 - **↻** on any exercise swaps it for another that trains the same slot.
 - Weight fields remember your last working weight per exercise and show it as
@@ -191,12 +196,13 @@ direction — the engine should never reach back into the UI.
 npm test          # or: node --test test/engine.test.js
 ```
 
-72 tests covering library integrity, the rotation, plan generation across five
+75 tests covering library integrity, the rotation, plan generation across five
 equipment setups × three session lengths × a full year of dates, determinism,
 training blocks, reroll behaviour, short-session slot rotation, warm-up and
-finisher steering, ramp-up sets, local-vs-UTC date handling, rep-range parsing,
-progression, deload and staleness rules, bodyweight rep targets, max-seeded
-starting weights, and the 1RM math.
+finisher steering, ramp-up sets, equipment gating (including the kettlebell
+toggle), local-vs-UTC date handling, rep-range parsing, progression, deload
+and staleness rules, bodyweight rep targets, timed-work duration progression,
+max-seeded starting weights, and the 1RM math.
 
 The suite has been mutation-tested — deliberately breaking the primary-slot
 preference, the date handling, the Epley formula, reroll determinism, the
@@ -255,8 +261,9 @@ working weight per lift), `dw.overrides` (focus changes and swaps),
 All dates are keyed to your **local** calendar day, not UTC, so a late-night
 weigh-in files under the day you were actually living in.
 
-Switching lb/kg relabels the display but does **not** convert numbers you
-already logged.
+Switching lb/kg asks whether to **convert** every stored number (lift loads to
+the nearest 0.5, body weight to 0.1 — the history is a record being restated,
+not a plate suggestion) or just relabel.
 
 Settings → Export writes a JSON backup. Settings → Import restores one —
 either **replace** (wipe this device, then load the file) or **merge** (union

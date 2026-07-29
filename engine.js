@@ -358,6 +358,17 @@
     return { weight, advance: false, reason: 'stale', reps: prog.reps, gapDays };
   }
 
+  /* Timed work progresses by duration: after `streak` consecutive sessions
+     completing every prescribed set, stretch each set by 5 seconds, capped
+     at +30 so the scheme stays recognizable. Only second-doses progress —
+     minutes of steady cardio are a different animal. */
+  function timedTarget(reps, streak) {
+    const m = String(reps).trim().match(/^(\d+)\s*sec$/i);
+    if (!m || !Number.isFinite(streak) || streak <= 0) return null;
+    const base = +m[1];
+    return { seconds: base + Math.min(streak * 5, 30), base };
+  }
+
   /* First session of a lift with no history but a recorded max: invert Epley
      to the load repeatable at the top of the rep window, rounded DOWN to
      plate math — a first session should start under the estimate, not over. */
@@ -415,7 +426,7 @@
     dateKey, dayNumber, keyToDate, blockFor,
     focusForDate, buildPlan, estimateMinutes,
     repRange, progression, countHolds, loadStep, rampSets,
-    repTarget, staleAdjust, startingWeight,
+    repTarget, staleAdjust, startingWeight, timedTarget,
     maxableLifts, e1rm, exerciseById,
     // exposed for tests and for anything that needs to reason about slots
     SLOT_FALLBACK, PRIMARY_SLOTS, FOCUS_BIAS, FOCUS_AVOID,

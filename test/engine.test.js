@@ -16,11 +16,11 @@ const { EXERCISES, FINISHERS, FOCI, FOCUS_ORDER, SCHEMES, REST } = LIB;
 /* ---------- fixtures ---------- */
 
 const EQUIP = {
-  full:       { bw: 1, db: 1, bar: 1, bench: 1, cable: 1, cardio: 1 },
-  bodyweight: { bw: 1, db: 0, bar: 0, bench: 0, cable: 0, cardio: 0 },
-  hotel:      { bw: 1, db: 0, bar: 0, bench: 0, cable: 0, cardio: 1 },
-  dumbbells:  { bw: 1, db: 1, bar: 0, bench: 0, cable: 0, cardio: 0 },
-  garage:     { bw: 1, db: 1, bar: 1, bench: 1, cable: 1, cardio: 0 }, // Peter's setup
+  full:       { bw: 1, db: 1, kb: 1, bar: 1, bench: 1, cable: 1, cardio: 1 },
+  bodyweight: { bw: 1, db: 0, kb: 0, bar: 0, bench: 0, cable: 0, cardio: 0 },
+  hotel:      { bw: 1, db: 0, kb: 0, bar: 0, bench: 0, cable: 0, cardio: 1 },
+  dumbbells:  { bw: 1, db: 1, kb: 0, bar: 0, bench: 0, cable: 0, cardio: 0 }, // DBs but no kettlebell
+  garage:     { bw: 1, db: 1, kb: 1, bar: 1, bench: 1, cable: 1, cardio: 0 }, // Peter's setup
 };
 const LENGTHS = ['short', 'standard', 'long'];
 
@@ -437,6 +437,49 @@ test('the finisher never hammers what the day already trained', () => {
       }
     }
   });
+});
+
+test('kettlebell movements require the kettlebell toggle, not dumbbells', () => {
+  assert.deepStrictEqual(Engine.exerciseById('kb-swing').equip, ['kb']);
+  assert.deepStrictEqual(Engine.exerciseById('kb-high-pull').equip, ['kb']);
+  assert.deepStrictEqual(FINISHERS.find(f => f.id === 'f-swings').equip, ['kb']);
+
+  // a dumbbells-only setup is never prescribed kettlebell work
+  const settings = settingsFor('dumbbells', 'standard');
+  for (const key of datesFrom('2026-01-01', 84)) {
+    const plan = Engine.buildPlan(key, settings);
+    const items = plan.main.map(m => m.ex).concat(plan.warm.map(w => w.ex));
+    if (plan.finisher) items.push(plan.finisher);
+    for (const it of items) {
+      assert.ok(!it.equip.includes('kb'), key + ' prescribed "' + it.name + '" without a kettlebell');
+    }
+  }
+
+  // and with the toggle on, swings actually appear
+  const kbSettings = { length: 'standard', units: 'lb',
+    equip: { bw: 1, db: 1, kb: 1, bar: 0, bench: 0, cable: 0, cardio: 0 } };
+  const seen = new Set();
+  for (const key of datesFrom('2026-01-01', 180)) {
+    Engine.buildPlan(key, kbSettings).main.forEach(m => seen.add(m.ex.id));
+  }
+  assert.ok(seen.has('kb-swing'), 'a kettlebell owner never got swings in 180 days');
+});
+
+/* ---------- timed-work progression ---------- */
+
+test('timed work stretches by 5 seconds per completed session, capped at +30', () => {
+  assert.deepStrictEqual(Engine.timedTarget('40 sec', 1), { seconds: 45, base: 40 });
+  assert.deepStrictEqual(Engine.timedTarget('40 sec', 3), { seconds: 55, base: 40 });
+  assert.deepStrictEqual(Engine.timedTarget('30 sec', 12), { seconds: 60, base: 30 },
+    'the bonus must cap at +30');
+});
+
+test('duration progression only applies to second-doses with a streak', () => {
+  assert.strictEqual(Engine.timedTarget('40 sec', 0), null, 'no streak, no suggestion');
+  assert.strictEqual(Engine.timedTarget('10 min', 4), null, 'steady cardio does not grind longer');
+  assert.strictEqual(Engine.timedTarget('6-8', 4), null, 'rep work progresses by load, not time');
+  assert.strictEqual(Engine.timedTarget('40 sec', NaN), null);
+  assert.strictEqual(Engine.timedTarget(null, 3), null);
 });
 
 /* ---------- ramp-up sets ---------- */

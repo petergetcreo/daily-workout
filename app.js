@@ -18,7 +18,7 @@ const KEY = {
 const DEFAULT_SETTINGS = {
   length: 'standard',
   units: 'lb',
-  equip: { bw: true, db: true, bar: true, bench: true, cable: true, cardio: true },
+  equip: { bw: true, db: true, kb: true, bar: true, bench: true, cable: true, cardio: true },
 };
 
 function load(key, fallback) {
@@ -108,6 +108,21 @@ function targetFor(item, beforeKey) {
   return prog ? { last, range, prog } : null;
 }
 
+/* Consecutive recent sessions in which every prescribed set of this timed
+   movement was completed. Days it simply was not programmed do not break
+   the streak. */
+function timedStreak(exId, beforeKey) {
+  let n = 0;
+  const keys = Object.keys(logs).filter(k => k < beforeKey).sort().reverse();
+  for (const k of keys) {
+    const t = logs[k] && logs[k].timed && logs[k].timed[exId];
+    if (!t) continue;
+    if (!(t.done >= t.of)) break;
+    if (++n >= 6) break;
+  }
+  return n;
+}
+
 /* ======================= day record ======================= */
 
 function today() { return dateKey(new Date()); }
@@ -153,6 +168,12 @@ function logSet(item, s, doneSets, range, rec, key) {
 
   if (!range) {
     rec.sets[item.index] = wasDone && doneSets === s ? s - 1 : s;
+    // timed work keeps an id-keyed record too, so it has a history that
+    // survives plan changes — that is what duration progression reads
+    rec.timed = rec.timed || {};
+    const done = rec.sets[item.index] || 0;
+    if (done > 0) rec.timed[item.ex.id] = { done, of: item.sets };
+    else delete rec.timed[item.ex.id];
   } else if (!wasDone) {
     // default new sets to the top of the range, or to what was logged last
     // time. A deload day defaults to the top like an advance does — at the
@@ -297,6 +318,19 @@ function renderToday() {
       }
       line.innerHTML = '<span class="last-label">' + label + '</span>' + cta;
       card.appendChild(line);
+    } else if (item.ex.type === 'core' || item.ex.type === 'interval') {
+      /* timed work: after consecutive complete sessions, suggest longer sets */
+      const streak = timedStreak(item.ex.id, key);
+      const tt = Engine.timedTarget(item.reps, streak);
+      if (tt) {
+        const line = document.createElement('div');
+        line.className = 'ex-last advance';
+        line.innerHTML =
+          '<span class="last-label">' + streak + ' full session' + (streak === 1 ? '' : 's') + ' in a row</span>' +
+          '<span class="last-cta">try ' + tt.seconds + ' sec ' +
+            (item.ex.type === 'core' ? 'holds' : 'efforts') + '</span>';
+        card.appendChild(line);
+      }
     }
 
     /* ramp-up sets before the day's first heavy compound, once a working
@@ -881,7 +915,8 @@ function applyImport(mode) {
 
 const EQUIP_LABELS = [
   ['bw',     'Bodyweight',      'Floor space, always on'],
-  ['db',     'Dumbbells / KB',  'Free weights at hand'],
+  ['db',     'Dumbbells',       'A pair, or adjustables'],
+  ['kb',     'Kettlebell',      'For swings and high pulls'],
   ['bar',    'Barbell + rack',  'Squat rack, pull-up bar'],
   ['bench',  'Bench',           'Flat or adjustable'],
   ['cable',  'Cable',           'Single adjustable pulley'],
@@ -917,29 +952,48 @@ function renderSettings() {
 
 /* ======================= rest timer ======================= */
 
-let restTimer = null, restLeft = 0;
+/* The timer counts against a wall-clock deadline, not a decrementing tick —
+   backgrounding the app or locking the screen cannot freeze it, and coming
+   back mid-rest shows the honest remainder (or ends it if time is up). A
+   screen wake lock keeps the phone awake while resting, where supported. */
+let restTimer = null, restEndsAt = 0;
+let wakeLock = null;
 
+function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  navigator.wakeLock.request('screen')
+    .then(l => { wakeLock = l; })
+    .catch(() => { wakeLock = null; });
+}
+function releaseWakeLock() {
+  if (wakeLock) { try { wakeLock.release(); } catch (e) { /* already gone */ } }
+  wakeLock = null;
+}
+
+function restLeftNow() {
+  return Math.max(0, Math.ceil((restEndsAt - Date.now()) / 1000));
+}
 function startRest(seconds, nextLabel) {
-  restLeft = seconds;
+  restEndsAt = Date.now() + seconds * 1000;
   $('rest-next').textContent = nextLabel || '';
   $('rest').hidden = false;
   paintRest();
   clearInterval(restTimer);
   restTimer = setInterval(() => {
-    restLeft--;
     paintRest();
-    if (restLeft <= 0) { beep(); stopRest(); }
-  }, 1000);
+    if (restLeftNow() <= 0) { beep(); stopRest(); }
+  }, 250);
+  acquireWakeLock();
 }
 function paintRest() {
-  const m = Math.floor(Math.max(restLeft, 0) / 60);
-  const s = Math.max(restLeft, 0) % 60;
-  $('rest-time').textContent = m + ':' + String(s).padStart(2, '0');
+  const left = restLeftNow();
+  $('rest-time').textContent = Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
 }
 function stopRest() {
   clearInterval(restTimer);
   restTimer = null;
   $('rest').hidden = true;
+  releaseWakeLock();
 }
 function beep() {
   try {
@@ -1025,7 +1079,7 @@ $('reroll-finisher').onclick = () => {
 };
 
 $('rest-skip').onclick = stopRest;
-$('rest-add').onclick = () => { restLeft += 30; paintRest(); };
+$('rest-add').onclick = () => { restEndsAt += 30000; paintRest(); };
 
 /* body weight */
 $('bw-log').onclick = logBodyweight;
@@ -1068,14 +1122,70 @@ document.querySelectorAll('#seg-length button').forEach(b => {
     renderToday();
   };
 });
+/* ---- unit switching ---- */
+
+const LB_PER_KG = 2.20462;
+let pendingUnits = null;
+
+function countLoggedWeights() {
+  let n = Object.keys(weights).length + Object.keys(maxes).length + Object.keys(body).length;
+  for (const r of Object.values(logs)) n += Object.keys((r && r.weights) || {}).length;
+  return n;
+}
+
+/* Lift loads round to the nearest 0.5, body weight to 0.1 — this is a
+   record being restated, not a plate-math suggestion, so keep it close. */
+function convertAllWeights(to) {
+  const conv = (v, perUnit) => {
+    const x = parseFloat(v);
+    if (!isFinite(x)) return v;
+    const y = to === 'kg' ? x / LB_PER_KG : x * LB_PER_KG;
+    return Math.round(y * perUnit) / perUnit;
+  };
+  const lift = v => conv(v, 2);   // nearest 0.5
+  const bw   = v => conv(v, 10);  // nearest 0.1
+  for (const id of Object.keys(weights)) weights[id] = String(lift(weights[id]));
+  for (const r of Object.values(logs)) {
+    if (!r || !r.weights) continue;
+    for (const id of Object.keys(r.weights)) r.weights[id] = String(lift(r.weights[id]));
+  }
+  for (const m of Object.values(maxes)) m.weight = lift(m.weight);
+  for (const k of Object.keys(body)) body[k] = bw(body[k]);
+}
+
+function applyUnits(to, convert) {
+  if (convert) convertAllWeights(to);
+  settings.units = to;
+  save(KEY.settings, settings);
+  persist();
+  pendingUnits = null;
+  $('units-sheet').hidden = true;
+  renderSettings();
+  renderToday();
+  renderHistory();
+}
+
 document.querySelectorAll('#seg-units button').forEach(b => {
   b.onclick = () => {
-    settings.units = b.dataset.val;
-    save(KEY.settings, settings);
-    renderSettings();
-    renderToday();
+    const to = b.dataset.val;
+    if (to === settings.units) return;
+    const n = countLoggedWeights();
+    if (!n) { applyUnits(to, false); return; }
+    pendingUnits = to;
+    $('units-sheet-title').textContent = 'Switch to ' + (to === 'kg' ? 'kilograms' : 'pounds') + '?';
+    $('units-summary').textContent =
+      n + ' stored number' + (n === 1 ? '' : 's') + ' can be converted (' +
+      (to === 'kg' ? '÷' : '×') + ' 2.2) so your history still reads true, ' +
+      'or left as-is with only the label changing.';
+    $('units-sheet').hidden = false;
   };
 });
+$('units-convert').onclick = () => { if (pendingUnits) applyUnits(pendingUnits, true); };
+$('units-relabel').onclick = () => { if (pendingUnits) applyUnits(pendingUnits, false); };
+$('units-cancel').onclick = () => { pendingUnits = null; $('units-sheet').hidden = true; };
+$('units-sheet').onclick = e => {
+  if (e.target.id === 'units-sheet') { pendingUnits = null; $('units-sheet').hidden = true; }
+};
 
 /* import */
 $('import-btn').onclick = () => $('import-file').click();
@@ -1149,7 +1259,14 @@ setInterval(() => {
   if (today() !== lastKey) { lastKey = today(); renderToday(); }
 }, 60000);
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && today() !== lastKey) { lastKey = today(); renderToday(); }
+  if (document.hidden) return;
+  if (today() !== lastKey) { lastKey = today(); renderToday(); }
+  // wake locks auto-release in the background; refresh the timer on return
+  if (restTimer) {
+    paintRest();
+    if (restLeftNow() <= 0) { beep(); stopRest(); }
+    else acquireWakeLock();
+  }
 });
 
 renderToday();

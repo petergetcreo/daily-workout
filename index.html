@@ -156,7 +156,7 @@
 
     <div class="block">
       <div class="block-head"><h2>Units</h2></div>
-      <p class="hint">Changes the label only — numbers you already logged are not converted.</p>
+      <p class="hint">Switching offers to convert the numbers you already logged, or just relabel them.</p>
       <div class="seg" id="seg-units">
         <button data-val="lb">Pounds</button>
         <button data-val="kg">Kilograms</button>
@@ -239,6 +239,17 @@
     <button class="primary" id="import-replace">Replace everything on this device</button>
     <button class="ghost" id="import-merge">Merge — this device wins conflicts</button>
     <button class="ghost" id="import-cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- unit switch -->
+<div class="sheet" id="units-sheet" hidden>
+  <div class="sheet-card">
+    <h2 id="units-sheet-title">Switch units?</h2>
+    <p class="hint" id="units-summary"></p>
+    <button class="primary" id="units-convert">Convert my numbers</button>
+    <button class="ghost" id="units-relabel">Just change the label</button>
+    <button class="ghost" id="units-cancel">Cancel</button>
   </div>
 </div>
 

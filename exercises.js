@@ -1,8 +1,8 @@
 /* Exercise library.
    Equipment codes:
      bw     bodyweight / floor space
-     db     dumbbells or kettlebell
-     kb     kettlebell specifically (swings, etc.)
+     db     dumbbells
+     kb     kettlebell (swings, high pulls)
      bar    barbell + squat/bench rack
      bench  flat bench
      cable  single adjustable cable
@@ -52,7 +52,7 @@ const EXERCISES = [
   { id: 'cable-facepull',name: 'Cable Face Pull',            slots: ['pull_acc'],                   equip: ['cable'],        type: 'accessory', load: true,  cue: 'Cable at eye height. Pull to the forehead, thumbs back.' },
   { id: 'db-rear-fly',   name: 'Dumbbell Rear Delt Fly',     slots: ['pull_acc'],                   equip: ['db'],           type: 'iso',       load: true,  cue: 'Hinge forward, light bells, pinkies up.' },
   { id: 'db-shrug',      name: 'Dumbbell Shrug',             slots: ['pull_acc'],                   equip: ['db'],           type: 'iso',       load: true,  cue: 'Straight up, one-second squeeze at the top.' },
-  { id: 'kb-high-pull',  name: 'Kettlebell High Pull',       slots: ['pull_acc'],                   equip: ['db'],           type: 'accessory', load: true,  cue: 'Hips snap first, the arm just follows.' },
+  { id: 'kb-high-pull',  name: 'Kettlebell High Pull',       slots: ['pull_acc'],                   equip: ['kb'],           type: 'accessory', load: true,  cue: 'Hips snap first, the arm just follows.' },
   { id: 'table-row',     name: 'Table Row',                  slots: ['pull_horiz', 'fb_pull'],      equip: ['bw'],           type: 'accessory', load: false, harder: 'inverted-row', cue: 'Under a sturdy table, heels out. Chest to the edge.' },
   { id: 'superman',      name: 'Superman Hold',              slots: ['pull_acc', 'core'],           equip: ['bw'],           type: 'core',      load: false, cue: 'Lift chest and thighs, reach long. Do not crank the neck.' },
   { id: 'prone-ytw',     name: 'Prone Y-T-W Raise',          slots: ['pull_acc'],                   equip: ['bw'],           type: 'iso',       load: false, cue: 'Face down, thumbs up. 8 reps in each letter position.' },
@@ -68,7 +68,7 @@ const EXERCISES = [
   { id: 'bw-squat',      name: 'Bodyweight Squat',           slots: ['squat', 'fb_lower'],          equip: ['bw'],           type: 'accessory', load: false, harder: 'reverse-lunge', cue: 'Slow 3 seconds down, explode up.' },
   { id: 'bb-rdl',        name: 'Barbell Romanian Deadlift',  slots: ['hinge', 'fb_lower'],          equip: ['bar'],          type: 'compound',  load: true,  cue: 'Push the hips back, bar shaves the thighs.' },
   { id: 'db-rdl',        name: 'Dumbbell Romanian Deadlift', slots: ['hinge', 'fb_lower'],          equip: ['db'],           type: 'compound',  load: true,  cue: 'Flat back. Stop when the hamstrings say stop.' },
-  { id: 'kb-swing',      name: 'Kettlebell Swing',           slots: ['hinge', 'fb_lower', 'cardio'],equip: ['db'],           type: 'compound',  load: true,  cue: 'Hip snap, not a squat. Bell floats to chest height.' },
+  { id: 'kb-swing',      name: 'Kettlebell Swing',           slots: ['hinge', 'fb_lower', 'cardio'],equip: ['kb'],           type: 'compound',  load: true,  cue: 'Hip snap, not a squat. Bell floats to chest height.' },
   { id: 'hip-thrust',    name: 'Barbell Hip Thrust',         slots: ['hinge'],                      equip: ['bar', 'bench'], type: 'compound',  load: true,  cue: 'Chin tucked, ribs down, full lockout squeeze.' },
   { id: 'cable-pullthru',name: 'Cable Pull-Through',         slots: ['hinge'],                      equip: ['cable'],        type: 'accessory', load: true,  cue: 'Face away, hinge back, snap the hips forward.' },
   { id: 'bulgarian',     name: 'Bulgarian Split Squat',      slots: ['unilateral'],                 equip: ['db', 'bench'],  type: 'compound',  load: true,  cue: 'Back foot on the bench, front shin near vertical.' },
@@ -136,7 +136,7 @@ const FINISHERS = [
   { id: 'f-emom',    name: 'EMOM 8',            equip: ['bw'],     stress: 'mixed',  detail: 'Every minute on the minute for 8 minutes: 10 burpees. Rest whatever is left of the minute.' },
   { id: 'f-tabata',  name: 'Tabata Intervals',  equip: ['bw'],     stress: 'lower',  detail: '20 seconds all out, 10 seconds rest, 8 rounds. Alternate jump squats and mountain climbers.' },
   { id: 'f-ladder',  name: 'Descending Ladder', equip: ['bw'],     stress: 'upper',  detail: '10-8-6-4-2 of push-ups and air squats. No rest until it is done.' },
-  { id: 'f-swings',  name: 'Swing Ladder',      equip: ['db'],     stress: 'lower',  detail: 'Kettlebell swings: 10-15-20-15-10. Rest 30 seconds between sets.' },
+  { id: 'f-swings',  name: 'Swing Ladder',      equip: ['kb'],     stress: 'lower',  detail: 'Kettlebell swings: 10-15-20-15-10. Rest 30 seconds between sets.' },
   { id: 'f-carry',   name: 'Loaded Carry',      equip: ['db'],     stress: 'mixed',  detail: '4 rounds: 40 seconds heavy farmer carry, 40 seconds rest. Go heavy enough that grip is the limiter.' },
   { id: 'f-intervals',name:'Cardio Intervals',  equip: ['cardio'], stress: 'cardio', detail: '6 rounds: 30 seconds hard, 90 seconds easy. Treadmill, bike, or rower.' },
   { id: 'f-steady',  name: 'Steady Finish',     equip: ['cardio'], stress: 'cardio', detail: '8 minutes at a conversational pace. Cool the system down, do not race it.' },
