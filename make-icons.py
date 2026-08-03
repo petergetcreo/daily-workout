@@ -56,3 +56,15 @@ def png(path, size, pad_ratio):
 png('icons/icon-192.png', 192, 0.10)
 png('icons/icon-512.png', 512, 0.10)
 png('icons/icon-maskable-512.png', 512, 0.30)
+
+# The iOS app icon: one 1024x1024 with no alpha, written straight into the
+# asset catalog so there is no hand-copied duplicate to forget about. Same
+# artwork as the web icons - the app and the website should look identical on
+# a home screen.
+import os
+
+IOS_ICON = 'ios/DailyWorkout/Assets.xcassets/AppIcon.appiconset/icon-1024.png'
+if os.path.isdir(os.path.dirname(IOS_ICON)):
+    png(IOS_ICON, 1024, 0.10)
+else:
+    print('skipped', IOS_ICON, '(asset catalog not present)')
