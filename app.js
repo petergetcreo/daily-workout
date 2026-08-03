@@ -150,6 +150,28 @@ function record(key) {
   r.sets = r.sets || {}; r.warm = r.warm || {}; r.weights = r.weights || {}; r.reps = r.reps || {};
   return r;
 }
+
+/* Everything one exercise can write into a day's record.
+
+   Swapping a movement out — or changing the day's focus — has to clear ALL of
+   it. `sets` and `reps` are the visible part, but `weights` is banked on the
+   FIRST tap of a set (see logSet), so a single tap then a swap is enough to
+   strand a load. performanceHistory counts any day with a weight OR reps as a
+   session, so a stranded weight becomes a phantom session with no reps —
+   which breaks countHolds' streak and quietly cancels a deload that was about
+   to trigger. It also charts a phantom point in lift trends and lists a
+   movement in the day viewer that was never performed.
+
+   The sticky working weight in `weights[exId]` is deliberately NOT cleared:
+   that is "what you last loaded on this lift", which is still true. */
+function clearExerciseRecord(rec, exId) {
+  if (!rec) return;
+  if (rec.sets)    delete rec.sets[exId];
+  if (rec.reps)    delete rec.reps[exId];
+  if (rec.weights) delete rec.weights[exId];
+  if (rec.timed)   delete rec.timed[exId];
+}
+
 function persist() {
   save(KEY.log, logs);
   save(KEY.weights, weights);
@@ -316,8 +338,7 @@ function renderToday() {
       ov.rerolls = ov.rerolls || {};
       // rerolls stay index-keyed on purpose: they mean "reroll this SLOT"
       ov.rerolls[item.index] = (ov.rerolls[item.index] || 0) + 1;
-      delete rec.sets[item.ex.id];
-      if (rec.reps) delete rec.reps[item.ex.id];
+      clearExerciseRecord(rec, item.ex.id);
       persist();
       renderToday();
     };
@@ -1250,8 +1271,12 @@ function openFocusSheet() {
       ov.focus = id;
       ov.rerolls = {};
       const rec = record(key);
+      // the whole day is being rebuilt — clear every trace, weights and timed
+      // completions included, so nothing from the old focus haunts history
       rec.sets = {};
       rec.reps = {};
+      rec.weights = {};
+      rec.timed = {};
       persist();
       $('focus-sheet').hidden = true;
       renderToday();
