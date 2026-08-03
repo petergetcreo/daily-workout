@@ -135,11 +135,16 @@
   const PT_PUSH_SLOTS = ['push_main', 'push_second', 'push_acc', 'triceps', 'fb_push'];
   const PT_LEGS_SLOTS = ['squat', 'hinge', 'unilateral', 'calves', 'fb_lower'];
 
+  /* Both ends are clamped to PT_REP_CAP. Capping only the top would let a big
+     score — 2 minutes of air squats routinely clears 84 — push the bottom of
+     the window above it and produce an inverted "27-25". */
+  const PT_REP_CAP = 25;
+  const PT_REP_FLOOR = 4;
   function ptWindow(count) {
     const c = parseInt(count, 10);
     if (!Number.isFinite(c) || c < 1) return null;
-    const lo = Math.max(4, Math.round(c * 0.3));
-    const hi = Math.min(25, Math.max(lo + 2, Math.round(c * 0.45)));
+    const lo = Math.min(PT_REP_CAP - 2, Math.max(PT_REP_FLOOR, Math.round(c * 0.3)));
+    const hi = Math.min(PT_REP_CAP, Math.max(lo + 2, Math.round(c * 0.45)));
     return lo + '-' + hi;
   }
   function ptMult(ratio) {

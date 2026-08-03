@@ -537,6 +537,24 @@ test('a 2-minute max maps to a 30-45% work window, clamped sane', () => {
   assert.strictEqual(Engine.ptWindow(null), null);
 });
 
+/* A big score used to push the BOTTOM of the window past the cap on the top,
+   producing "27-25" — which reads as nonsense on the card and inverts to a
+   25-27 window once parsed. Two minutes of air squats clears 84 routinely,
+   so this is ordinary input, not an extreme. */
+test('a big 2-minute score never inverts the window', () => {
+  for (const count of [83, 84, 90, 100, 150, 200]) {
+    const w = Engine.ptWindow(count);
+    const range = Engine.repRange(w);
+    assert.ok(range, `${count} produced an unparseable window: ${w}`);
+    const [lo, hi] = w.split('-').map(Number);
+    assert.ok(lo <= hi, `${count} produced an inverted window: ${w}`);
+    assert.ok(hi <= 25, `${count} exceeded the rep cap: ${w}`);
+    assert.ok(hi - lo >= 2, `${count} produced too narrow a window: ${w}`);
+  }
+  assert.strictEqual(Engine.ptWindow(90), '23-25', 'past the cap, everyone trains the same top window');
+  assert.strictEqual(Engine.ptWindow(200), '23-25');
+});
+
 test('PT results resize bodyweight, core, and conditioning work', () => {
   const base = settingsFor('bodyweight', 'standard');
   const tested = Object.assign({}, base, {
