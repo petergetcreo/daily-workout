@@ -12,6 +12,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandler {
 
     private let impact = UIImpactFeedbackGenerator(style: .medium)
     private let lightImpact = UIImpactFeedbackGenerator(style: .light)
+    private let notifier = RestNotifier()
 
     func userContentController(_ userContentController: WKUserContentController,
                                didReceive message: WKScriptMessage) {
@@ -27,6 +28,13 @@ final class NativeBridge: NSObject, WKScriptMessageHandler {
         case "keepAwake":
             let on = body["on"] as? Bool ?? false
             UIApplication.shared.isIdleTimerDisabled = on
+
+        case "scheduleRestEnd":
+            let seconds = (body["seconds"] as? Double) ?? Double(body["seconds"] as? Int ?? 0)
+            notifier.schedule(after: seconds, body: body["label"] as? String ?? "")
+
+        case "cancelRestEnd":
+            notifier.cancel()
 
         case "ready":
             // One line at startup saying what the shell installed and whether

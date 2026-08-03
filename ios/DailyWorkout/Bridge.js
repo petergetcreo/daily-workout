@@ -16,7 +16,23 @@
     try { handler.postMessage(msg); } catch (e) { /* shell went away */ }
   }
 
-  window.NativeShell = { version: 1, post: post };
+  /* app.js feature-detects this object and calls through it. In a browser it
+     simply does not exist, and every call site is guarded. */
+  window.NativeShell = {
+    version: 2,
+    post: post,
+
+    /* A rest that runs out while the app is backgrounded cannot announce
+       itself from JavaScript — the interval stops firing once iOS suspends
+       the app. Hand the deadline to the system instead. iOS suppresses this
+       while the app is in front, so it only ever surfaces if you left. */
+    scheduleRestEnd: function (seconds, label) {
+      post({ action: 'scheduleRestEnd', seconds: Number(seconds) || 0, label: label || '' });
+    },
+    cancelRestEnd: function () {
+      post({ action: 'cancelRestEnd' });
+    }
+  };
 
   /* Report what the shell actually installed, and whether this origin can
      store anything. Every byte of app state is in localStorage, so if that is

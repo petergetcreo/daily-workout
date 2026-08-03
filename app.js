@@ -1190,6 +1190,22 @@ function buildEquipToggles(box) {
 let restTimer = null, restEndsAt = 0;
 let wakeLock = null;
 
+/* The native iOS shell (see ios/) exposes a few things the web platform will
+   not give us. It is absent in a browser, so every call site guards — the web
+   version simply goes without. */
+const shell = typeof window !== 'undefined' ? (window.NativeShell || null) : null;
+
+/* Hand the rest deadline to the system so it can announce the end even if the
+   app is backgrounded, where JS intervals stop firing. iOS suppresses the
+   notification while the app is in front, so it only ever appears if you
+   actually left — no duplicate of the beep-and-flash you are watching. */
+function syncRestNotice() {
+  if (!shell) return;
+  const left = restLeftNow();
+  if (left > 0) shell.scheduleRestEnd(left, $('rest-next').textContent || '');
+  else shell.cancelRestEnd();
+}
+
 function acquireWakeLock() {
   if (!('wakeLock' in navigator)) return;
   navigator.wakeLock.request('screen')
@@ -1227,6 +1243,7 @@ function startRest(seconds, nextLabel) {
   clearInterval(restTimer);
   restTimer = setInterval(tickRest, 250);
   acquireWakeLock();
+  syncRestNotice();
 }
 
 /* A rest that runs out announces itself twice: the tone, and a green flash.
@@ -1235,6 +1252,8 @@ function startRest(seconds, nextLabel) {
 function endRest() {
   clearInterval(restTimer);
   restTimer = null;
+  // we are in front and about to announce it ourselves
+  if (shell) shell.cancelRestEnd();
   beep();
   $('rest').classList.add('over');
   $('rest-label').textContent = 'Rest over';
@@ -1252,6 +1271,7 @@ function stopRest() {
   restTimer = null;
   clearTimeout(restFlashTimer);
   restFlashTimer = null;
+  if (shell) shell.cancelRestEnd();
   const el = $('rest');
   el.hidden = true;
   el.classList.remove('over');
@@ -1388,6 +1408,7 @@ $('rest-add').onclick = () => {
   }
   restEndsAt += 30000;
   paintRest();
+  syncRestNotice();   // the deadline moved; the system needs the new one
 };
 
 /* body weight */

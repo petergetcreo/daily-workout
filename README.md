@@ -311,6 +311,13 @@ with no signal.
 Over plain HTTP on your LAN it will still install to the home screen and run,
 but iOS blocks service workers on insecure origins, so it will not work offline.
 
+There is also a native iOS shell in `ios/` — the same web app in a WKWebView,
+which buys three things Safari will not give it: a beep that survives the
+hardware mute switch, real haptics, and a notification when a rest ends while
+you are in another app. The web layer is unchanged; `ios/DailyWorkout/Bridge.js`
+installs `navigator.vibrate` and `navigator.wakeLock` backed by UIKit, and every
+call site here guards for their absence. See `ios/README.md`.
+
 ## Data
 
 Everything is in `localStorage` on the device — nothing leaves the phone. Keys:
