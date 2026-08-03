@@ -651,7 +651,14 @@ input:checked + .switch::after { transform: translateX(18px); background: #170c0
   z-index: 40;
   padding: 20px;
 }
-.sheet { align-items: flex-end; }
+/* A sheet taller than the screen — the first-run setup one, the lift and goal
+   pickers — used to slide up under the status bar and the dynamic island,
+   because nothing capped its height and the overlay ignored the top inset.
+   Reserve the inset here and let the card scroll inside itself instead. */
+.sheet {
+  align-items: flex-end;
+  padding-top: calc(20px + var(--safe-top));
+}
 .rest-card {
   background: var(--surface);
   border-radius: 22px;
@@ -692,6 +699,10 @@ input:checked + .switch::after { transform: translateX(18px); background: #170c0
   width: 100%;
   max-width: 560px;
   border: 1px solid var(--line);
+  /* never taller than the space the overlay leaves it */
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .sheet-card h2 { font-size: 19px; margin-bottom: 14px; }
 .focus-opt {
