@@ -1186,20 +1186,49 @@ function stopRest() {
   $('rest').hidden = true;
   releaseWakeLock();
 }
-function beep() {
+
+/* One AudioContext, unlocked by a user gesture and kept alive.
+
+   This has to work this way on iOS, which is the whole point of the timer: a
+   context constructed outside a user gesture starts SUSPENDED and stays
+   silent, and the timer fires from an interval, which is not a gesture. Safari
+   also has no navigator.vibrate, so if the tone does not play there is no
+   fallback signal at all — the rest just ends with nothing.
+
+   Unlocking on every pointerdown rather than once is deliberate: iOS suspends
+   the context again when the app is backgrounded, which is exactly what
+   happens when you put the phone down between sets. */
+let audioCtx = null;
+
+function unlockAudio() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    [0, 0.18, 0.36].forEach(t => {
-      const o = ctx.createOscillator(), g = ctx.createGain();
-      o.frequency.value = 880;
-      o.connect(g); g.connect(ctx.destination);
-      g.gain.setValueAtTime(0.0001, ctx.currentTime + t);
-      g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + t + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.13);
-      o.start(ctx.currentTime + t);
-      o.stop(ctx.currentTime + t + 0.14);
-    });
-    setTimeout(() => ctx.close(), 900);
+    if (!audioCtx) audioCtx = new AC();
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  } catch (e) { audioCtx = null; }
+}
+document.addEventListener('pointerdown', unlockAudio, true);
+document.addEventListener('keydown', unlockAudio, true);
+
+function beep() {
+  /* A rest timer only ever starts from a tap, so by the time this fires the
+     context has been unlocked at least once. */
+  unlockAudio();
+  try {
+    if (audioCtx && audioCtx.state === 'running') {
+      const t0 = audioCtx.currentTime;
+      [0, 0.18, 0.36].forEach(t => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.frequency.value = 880;
+        o.connect(g); g.connect(audioCtx.destination);
+        g.gain.setValueAtTime(0.0001, t0 + t);
+        g.gain.exponentialRampToValueAtTime(0.25, t0 + t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + t + 0.13);
+        o.start(t0 + t);
+        o.stop(t0 + t + 0.14);
+      });
+    }
   } catch (e) { /* audio blocked */ }
   if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
 }
@@ -1607,6 +1636,9 @@ setInterval(() => {
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
   if (today() !== lastKey) { lastKey = today(); renderToday(); }
+  // the audio context is suspended while backgrounded; give it a chance to
+  // come back before the rest ends, in case the user never taps again
+  unlockAudio();
   // wake locks auto-release in the background; refresh the timer on return
   if (restTimer) {
     paintRest();
