@@ -40,9 +40,23 @@ function save(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* private mode */ }
 }
 
-let settings  = Object.assign(structuredClone(DEFAULT_SETTINGS), load(KEY.settings, {}));
-settings.equip = Object.assign(structuredClone(DEFAULT_SETTINGS.equip), settings.equip || {});
-settings.profile = Object.assign(structuredClone(DEFAULT_SETTINGS.profile), settings.profile || {});
+/* Fold a stored or imported settings object onto the defaults.
+
+   The nested objects need their own merge: a plain Object.assign would let a
+   backup written by an older version drop `experience` or `equip.kb`
+   outright, and an explicit null would replace the whole object and throw on
+   the first render. Both the boot path and the import path go through here so
+   they cannot drift — the import path used to normalize `equip` but not
+   `profile`, which is exactly the kind of gap this closes. */
+function normalizeSettings(raw) {
+  const obj = v => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  const s = Object.assign(structuredClone(DEFAULT_SETTINGS), obj(raw));
+  s.equip   = Object.assign(structuredClone(DEFAULT_SETTINGS.equip), obj(s.equip));
+  s.profile = Object.assign(structuredClone(DEFAULT_SETTINGS.profile), obj(s.profile));
+  return s;
+}
+
+let settings  = normalizeSettings(load(KEY.settings, {}));
 let logs      = load(KEY.log, {});
 let weights   = load(KEY.weights, {});
 let overrides = load(KEY.overrides, {});
@@ -1053,7 +1067,14 @@ let pendingImport = null;
 function validateBackup(d) {
   if (!d || typeof d !== 'object' || Array.isArray(d)) return false;
   const sections = ['settings', 'logs', 'weights', 'overrides', 'body', 'maxes', 'goals'];
-  const present = sections.filter(k => d[k] && typeof d[k] === 'object' && !Array.isArray(d[k]));
+  // a section that is present at all must be a plain object — an array or a
+  // scalar here means the file is not what it claims to be, even if some
+  // other section happens to look right
+  for (const k of sections) {
+    if (d[k] == null) continue;
+    if (typeof d[k] !== 'object' || Array.isArray(d[k])) return false;
+  }
+  const present = sections.filter(k => d[k] && typeof d[k] === 'object');
   if (!present.length) return false;
   // date-keyed sections must actually be keyed by dates
   for (const k of ['logs', 'overrides', 'body']) {
@@ -1081,9 +1102,7 @@ function applyImport(mode) {
   const d = pendingImport;
   if (!d) return;
   if (mode === 'replace') {
-    settings = Object.assign(structuredClone(DEFAULT_SETTINGS), d.settings || {});
-    settings.equip = Object.assign(structuredClone(DEFAULT_SETTINGS.equip),
-      (d.settings && d.settings.equip) || {});
+    settings  = normalizeSettings(d.settings);
     logs      = d.logs      || {};
     weights   = d.weights   || {};
     overrides = d.overrides || {};
