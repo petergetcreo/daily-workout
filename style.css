@@ -667,6 +667,24 @@ input:checked + .switch::after { transform: translateX(18px); background: #170c0
 .rest-btns { display: flex; gap: 10px; margin-top: 20px; }
 .rest-btns button { margin: 0; flex: 1; }
 
+/* The end of a rest cannot rely on sound. iOS silences Web Audio with the
+   hardware mute switch — verified in the Simulator: with output muted the
+   AudioContext stays suspended and no tone plays — and Safari has no
+   navigator.vibrate to fall back to. On a phone that lives on silent this
+   flash is the only cue there is. The wake lock held through the rest means
+   the screen is already awake to show it. */
+.rest.over { animation: rest-pulse .42s steps(1, end) 4; }
+.rest.over .rest-card  { border-color: var(--good); }
+.rest.over .rest-label { color: var(--good); }
+.rest.over .rest-time  { color: var(--good); letter-spacing: .04em; }
+@keyframes rest-pulse {
+  0%, 100% { background: rgba(6, 8, 11, .82); }
+  50%      { background: rgba(53, 208, 127, .28); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rest.over { animation: none; background: rgba(53, 208, 127, .22); }
+}
+
 .sheet-card {
   background: var(--surface);
   border-radius: 22px 22px 14px 14px;

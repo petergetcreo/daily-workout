@@ -197,6 +197,11 @@ trained lifts that have at least two logged sessions.
   to the movement (100s for compounds, 40s for core and intervals). The timer
   counts against the wall clock, so locking the phone can't freeze it, and it
   holds a screen wake lock while running where the browser supports one.
+- When the rest runs out it beeps *and* flashes the screen green for a beat.
+  Both, because neither is enough alone on a phone: iOS silences Web Audio
+  with the hardware mute switch, and Safari has no vibration API to fall back
+  on, so on a silenced phone the flash is the only cue that lands. The wake
+  lock means the screen is already awake to show it.
 - Timed work (planks, carries, intervals) progresses by duration: complete
   every prescribed set a few sessions running and the card suggests +5 seconds
   per completed session, capped at +30.

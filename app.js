@@ -1204,18 +1204,45 @@ function releaseWakeLock() {
 function restLeftNow() {
   return Math.max(0, Math.ceil((restEndsAt - Date.now()) / 1000));
 }
+/* How long the "GO" flash holds after a rest ends, before the overlay closes.
+   Matches the 4 × 0.42s pulse in the stylesheet, with a little slack. */
+const REST_FLASH_MS = 1700;
+let restFlashTimer = null;
+
+function tickRest() {
+  paintRest();
+  if (restLeftNow() <= 0) endRest();
+}
+
 function startRest(seconds, nextLabel) {
+  clearTimeout(restFlashTimer);
+  restFlashTimer = null;
+  const el = $('rest');
+  el.classList.remove('over');
+  $('rest-label').textContent = 'Rest';
   restEndsAt = Date.now() + seconds * 1000;
   $('rest-next').textContent = nextLabel || '';
-  $('rest').hidden = false;
+  el.hidden = false;
   paintRest();
   clearInterval(restTimer);
-  restTimer = setInterval(() => {
-    paintRest();
-    if (restLeftNow() <= 0) { beep(); stopRest(); }
-  }, 250);
+  restTimer = setInterval(tickRest, 250);
   acquireWakeLock();
 }
+
+/* A rest that runs out announces itself twice: the tone, and a green flash.
+   The flash is not decoration — it is the only cue that survives a phone on
+   silent, where Web Audio is muted and Safari offers no vibration. */
+function endRest() {
+  clearInterval(restTimer);
+  restTimer = null;
+  beep();
+  $('rest').classList.add('over');
+  $('rest-label').textContent = 'Rest over';
+  $('rest-time').textContent = 'GO';
+  clearTimeout(restFlashTimer);
+  restFlashTimer = setTimeout(stopRest, REST_FLASH_MS);
+}
+
 function paintRest() {
   const left = restLeftNow();
   $('rest-time').textContent = Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
@@ -1223,7 +1250,11 @@ function paintRest() {
 function stopRest() {
   clearInterval(restTimer);
   restTimer = null;
-  $('rest').hidden = true;
+  clearTimeout(restFlashTimer);
+  restFlashTimer = null;
+  const el = $('rest');
+  el.hidden = true;
+  el.classList.remove('over');
   releaseWakeLock();
 }
 
@@ -1343,7 +1374,21 @@ $('reroll-finisher').onclick = () => {
 };
 
 $('rest-skip').onclick = stopRest;
-$('rest-add').onclick = () => { restEndsAt += 30000; paintRest(); };
+$('rest-add').onclick = () => {
+  // +30s during the GO flash means "I need more" — restart the countdown
+  // rather than adding time to a timer that already stopped ticking
+  if (!restTimer) {
+    clearTimeout(restFlashTimer);
+    restFlashTimer = null;
+    $('rest').classList.remove('over');
+    $('rest-label').textContent = 'Rest';
+    restEndsAt = Date.now();
+    restTimer = setInterval(tickRest, 250);
+    acquireWakeLock();
+  }
+  restEndsAt += 30000;
+  paintRest();
+};
 
 /* body weight */
 $('bw-log').onclick = logBodyweight;
@@ -1686,7 +1731,7 @@ document.addEventListener('visibilitychange', () => {
   // wake locks auto-release in the background; refresh the timer on return
   if (restTimer) {
     paintRest();
-    if (restLeftNow() <= 0) { beep(); stopRest(); }
+    if (restLeftNow() <= 0) endRest();
     else acquireWakeLock();
   }
 });
