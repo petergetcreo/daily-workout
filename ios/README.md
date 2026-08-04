@@ -69,11 +69,29 @@ flash you are already looking at.
 Permission is requested on the first rest, not at launch, so the prompt arrives
 attached to something you just did.
 
-**Not yet verified end to end.** It builds and the bridge wiring is confirmed,
-but actually seeing a banner needs three things the Simulator cannot be driven
-through from a script: granting the permission prompt, starting a rest, and
-backgrounding the app. Test it on a real device — start a set, switch to
-another app, wait.
+**Verified end to end** in the Simulator on 2026-08-04: permission granted, a
+notification scheduled, the app backgrounded, banner delivered. That confirms
+the whole path — authorization, `UNNotificationRequest`, and delivery — which
+the daily reminders below share.
+
+## Daily reminders
+
+Two optional nudges, set in Settings → Reminders: one in the morning, and one
+later that only arrives if the workout is still unlogged.
+
+These exist only here. A web page cannot schedule anything for tomorrow —
+`setTimeout` dies with the tab, Web Push needs a server this app deliberately
+does not have, and the Notification Triggers API never shipped in Safari — so
+`app.js` hides the whole settings block unless `NativeShell.setReminders`
+exists.
+
+iOS cannot evaluate a condition when a notification fires, so "only if I have
+not trained" is resolved in advance. `reconcileReminders()` in `app.js` works
+out which of the next seven days still need a nudge and hands over the entire
+schedule; `Reminders.swift` replaces everything pending with it. Each day is
+its own request, which is what makes a single day's reminder withdrawable when
+that day gets completed. Reconciling on every launch keeps the seven-day window
+topped up, so the reminders survive a stretch of not opening the app.
 
 ## Data does not carry over from the website
 
