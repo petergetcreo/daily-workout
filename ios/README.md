@@ -41,23 +41,38 @@ xcodebuild -project DailyWorkout.xcodeproj -scheme DailyWorkout \
   -derivedDataPath ./build build
 ```
 
-## Signing and TestFlight
+## Signing and getting it on the phone
 
-Nothing here is signed for a device yet. Once the Apple Developer Program
+This is a one-person app, so it installs straight from Xcode. **No TestFlight,
+no App Store Connect record, no App Review.** Once the Apple Developer Program
 enrollment is active:
 
 1. Xcode → target **DailyWorkout** → **Signing & Capabilities** → set **Team**.
-   Leave "Automatically manage signing" on.
-2. App Store Connect → **Apps** → **+** → new app, bundle ID
-   `com.petergetcreo.dailyworkout`, platform iOS.
-3. Xcode → **Product → Archive** → **Distribute App** → **TestFlight & App Store**.
-4. In App Store Connect → **TestFlight**, add testers. Adding someone as an
-   **internal** tester (an App Store Connect user) skips App Review entirely;
-   external testers need a one-time review of the first build.
-5. Testers install the TestFlight app and accept the emailed invite.
+   Leave "Automatically manage signing" on — it registers the device and issues
+   the profile without any portal visits.
+2. Plug the phone in, trust the Mac, pick it as the run destination.
+3. **Product → Run.**
 
-Builds expire after 90 days. Upload a new one to refresh — the app and its data
-stay put.
+That is the whole thing. Once the device is paired, "Connect via network" in
+**Window → Devices and Simulators** means later runs need no cable.
+
+**The install lasts a year**, which is the life of the development provisioning
+profile — not the 7 days that free personal-team signing gives you, and not the
+90 days a TestFlight build gets. Re-running from Xcode after any change renews
+it, so in practice it never expires on its own. Let the $99 membership lapse
+and the app stops launching.
+
+<details>
+<summary>If a second person ever needs it</summary>
+
+Then it becomes a TestFlight job: create the app record in App Store Connect
+with bundle ID `com.petergetcreo.dailyworkout`, **Product → Archive →
+Distribute App → TestFlight & App Store**, and add them under TestFlight.
+Adding someone as an **internal** tester (an App Store Connect user) skips App
+Review entirely and needs no privacy policy; external testers need a one-time
+review of the first build. TestFlight builds expire 90 days after upload —
+upload a new one to refresh, and the app's data stays put.
+</details>
 
 ## Rest notifications
 
