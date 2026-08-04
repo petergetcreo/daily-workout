@@ -308,6 +308,13 @@ function renderToday() {
   const rec = record(key);
   const d = keyToDate(key);
 
+  /* The header belongs to whichever view is on screen, and this function is
+     called from Settings too — changing equipment, age, experience or session
+     length all rebuild the plan. Without this guard, flipping an equipment
+     switch replaced the word "Settings" with "Engine + Core" under your thumb
+     and brought the streak pill back with it. */
+  const onToday = $('view-today').classList.contains('active');
+
   const name = (settings.profile.name || '').trim();
   /* A greeting in front of a long weekday overruns the space left by the
      streak pill and wraps onto a second line — "Afternoon, Peter · Tuesday,
@@ -315,23 +322,27 @@ function renderToday() {
      greeting to make room for. */
   const dateStr = d.toLocaleDateString(undefined,
     { weekday: name ? 'short' : 'long', month: 'short', day: 'numeric' });
-  if (name) {
-    const h = new Date().getHours();
-    const hello = h < 5 ? 'Up late' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening';
-    $('hdr-date').textContent = hello + ', ' + name + ' · ' + dateStr;
-  } else {
-    $('hdr-date').textContent = dateStr;
+  if (onToday) {
+    if (name) {
+      const h = new Date().getHours();
+      const hello = h < 5 ? 'Up late' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening';
+      $('hdr-date').textContent = hello + ', ' + name + ' · ' + dateStr;
+    } else {
+      $('hdr-date').textContent = dateStr;
+    }
+    $('hdr-focus').textContent = plan.focus.label;
   }
-  $('hdr-focus').textContent = plan.focus.label;
 
   /* The focus blurb ("Conditioning and midsection") only restated the label
      above it. What is actually worth the line is the shape of the session you
      are about to start — how much work, and how long it will take. */
   const mainSets = plan.main.reduce((a, m) => a + m.sets, 0);
   const exCount  = plan.main.length;
-  $('hdr-blurb').textContent =
-    mainSets + ' set' + (mainSets === 1 ? '' : 's') +
-    ' · ~' + plan.minutes + ' min';
+  if (onToday) {
+    $('hdr-blurb').textContent =
+      mainSets + ' set' + (mainSets === 1 ? '' : 's') +
+      ' · ~' + plan.minutes + ' min';
+  }
   /* the time estimate now lives in the header, so this stops repeating it */
   $('main-note').textContent = exCount + ' exercise' + (exCount === 1 ? '' : 's');
 
@@ -620,10 +631,13 @@ function renderToday() {
 
   /* A zero streak is the one number nobody wants staring back at them, and it
      was holding prime space in the header to say nothing. It reappears the
-     moment there is a streak to show. */
+     moment there is a streak to show — but only on Today, since setHeader
+     hides it outright on the other two views. */
   const s = streak();
-  $('hdr-streak').hidden = s === 0;
-  $('hdr-streak').querySelector('.streak-num').textContent = s;
+  if (onToday) {
+    $('hdr-streak').hidden = s === 0;
+    $('hdr-streak').querySelector('.streak-num').textContent = s;
+  }
 }
 
 function esc(s) {
