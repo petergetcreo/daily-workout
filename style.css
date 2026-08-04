@@ -8,9 +8,18 @@
   --accent:    #ff7a2f;
   --accent-dim:#8a3d15;
   --good:      #35d07f;
+  /* The destructive button separates itself from the accent by *form* — a
+     tinted fill and a heavier weight — rather than by hue, because orange and
+     red are neighbours and no red is going to look unrelated to this orange.
+     Form does the work, so the red itself is free to be the most legible one:
+     6.27:1 on a card, against 4.93 for the pinker alternatives. */
+  --danger:      #ff6b6b;
+  --danger-line: #472530;
   --radius:    14px;
   --safe-top:    env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* iOS minimum comfortable touch target */
+  --tap: 44px;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -35,14 +44,29 @@ body {
 
 h1, h2 { margin: 0; font-weight: 650; }
 
-/* ---------- top bar ---------- */
+/* ---------- top bar ----------
+   Sticky, and it collapses once you scroll past it. Mid-workout the useful
+   part of this header is the streak and which day it is, not the blurb — so
+   scrolling trades the blurb and half the type size for a compact bar that
+   stays put. `.scrolled` is toggled on <body> from app.js. */
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 15;
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: calc(18px + var(--safe-top)) 18px 14px;
+  padding: calc(10px + var(--safe-top)) 18px 12px;
   background: linear-gradient(180deg, #191d26 0%, var(--bg) 100%);
   border-bottom: 1px solid var(--line);
+  transition: padding .18s ease;
+}
+body.scrolled .topbar {
+  align-items: center;
+  padding-top: calc(9px + var(--safe-top));
+  padding-bottom: 9px;
+  background: rgba(20, 23, 30, .92);
+  backdrop-filter: blur(14px);
 }
 .topbar-main { flex: 1; min-width: 0; }
 .date {
@@ -50,9 +74,32 @@ h1, h2 { margin: 0; font-weight: 650; }
   letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--muted);
+  /* one line, always — a wrap here shoves the whole header taller */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: font-size .18s ease;
 }
-.focus { font-size: 30px; line-height: 1.1; margin-top: 2px; letter-spacing: -0.02em; }
-.blurb { font-size: 13px; color: var(--muted); margin-top: 3px; }
+.focus {
+  font-size: 30px;
+  line-height: 1.1;
+  margin-top: 2px;
+  letter-spacing: -0.02em;
+  transition: font-size .18s ease;
+}
+/* Now a data line rather than a description — tabular figures so the numbers
+   do not jitter as sets are logged. */
+.blurb {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  max-height: 20px;
+  transition: max-height .18s ease, opacity .14s ease;
+}
+body.scrolled .focus { font-size: 20px; }
+body.scrolled .blurb { max-height: 0; opacity: 0; }
 
 .streak {
   display: flex;
@@ -63,8 +110,13 @@ h1, h2 { margin: 0; font-weight: 650; }
   border-radius: 12px;
   padding: 8px 11px;
   flex-shrink: 0;
+  transition: padding .18s ease;
 }
-.streak-num { font-size: 24px; font-weight: 700; color: var(--accent); line-height: 1; }
+body.scrolled .streak { padding: 5px 9px; }
+body.scrolled .streak-num { font-size: 19px; }
+/* A streak is a reading, not a control — it wears text ink. The accent is
+   reserved for things you tap and for live data. */
+.streak-num { font-size: 24px; font-weight: 700; color: var(--text); line-height: 1; transition: font-size .18s ease; }
 .streak-label { font-size: 9px; line-height: 1.15; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 
 /* ---------- views ---------- */
@@ -110,9 +162,12 @@ h1, h2 { margin: 0; font-weight: 650; }
   align-items: center;
   gap: 12px;
   padding: 13px 15px;
+  min-height: var(--tap);
   border-bottom: 1px solid var(--line);
   font-size: 15px;
+  transition: background .12s ease;
 }
+.warmup-list li:active { background: var(--surface-2); }
 .warmup-list li:last-child { border-bottom: 0; }
 .warmup-list .wu-dose { margin-left: auto; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 .warmup-list li.done { color: var(--muted); }
@@ -126,7 +181,10 @@ h1, h2 { margin: 0; font-weight: 650; }
 }
 li.done .tick, .set.done { border-color: var(--good); background: var(--good); color: #08110c; }
 
-/* ---------- exercise cards ---------- */
+/* ---------- exercise cards ----------
+   Only the exercise you are on is a card. Everything else is a row in a
+   shared container, so at a glance the screen says "this one" instead of
+   giving four things the same weight. */
 .ex {
   background: var(--surface);
   border-radius: var(--radius);
@@ -135,11 +193,72 @@ li.done .tick, .set.done { border-color: var(--good); background: var(--good); c
   border: 1px solid transparent;
 }
 .ex.complete { border-color: rgba(53,208,127,.35); }
+
+/* the one in play — lifted off the page rather than louder */
+.ex.is-active {
+  margin: 10px 0;
+  border-color: var(--line);
+  box-shadow: 0 6px 20px -10px rgba(0,0,0,.7);
+}
+.ex.is-active .ex-name { font-size: 19px; }
+.now-label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+/* a run of collapsed rows */
+.stack {
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.ex-line {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 15px;
+  min-height: var(--tap);
+  font-size: 15px;
+  border-bottom: 1px solid var(--line);
+  transition: background .12s ease;
+  cursor: pointer;
+}
+.ex-line:last-child { border-bottom: 0; }
+.ex-line:active { background: var(--surface-2); }
+.ex-line:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ex-line .l-name { flex: 1; min-width: 0; }
+.ex-line .l-dose {
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ex-line.is-done .l-name { color: var(--muted); text-decoration: line-through; }
+.ex-line .l-tick {
+  width: 20px; height: 20px;
+  flex-shrink: 0;
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: transparent;
+}
+.ex-line.is-done .l-tick { border-color: var(--good); background: var(--good); color: #08110c; }
+/* started but not finished — the ring says "you were here" without claiming done */
+.ex-line.is-part .l-tick { border-color: var(--accent); }
 .ex-top { display: flex; align-items: flex-start; gap: 10px; }
 .ex-name { font-size: 17px; font-weight: 620; flex: 1; letter-spacing: -.01em; }
+/* A dose is a fact about today, not an instruction — text ink. What earns the
+   accent on this card is the one live cue below it ("try 160 lb"). */
 .ex-dose {
   font-size: 13px;
-  color: var(--accent);
+  color: var(--text);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -187,25 +306,6 @@ li.done .tick, .set.done { border-color: var(--good); background: var(--good); c
   margin-right: 8px;
 }
 
-/* lift trend rows: name + delta, sparkline, latest estimate */
-.lift-trend {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.lift-trend .max-main { flex: 1; min-width: 0; }
-.lift-spark {
-  width: 96px;
-  height: 30px;
-  flex: none;
-}
-.lift-now {
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-  min-width: 44px;
-  text-align: right;
-}
 
 .ex-bottom {
   display: flex;
@@ -214,21 +314,26 @@ li.done .tick, .set.done { border-color: var(--good); background: var(--good); c
   margin-top: 12px;
   flex-wrap: wrap;
 }
-.sets { display: flex; gap: 7px; }
+.sets { display: flex; gap: 6px; }
+/* The most-tapped control in the app, and it was under the 44px iOS minimum.
+   At five sets the row uses the full card width and the weight stepper wraps
+   to its own line, which is the better layout for it anyway. */
 .set {
-  width: 38px; height: 38px;
-  border-radius: 10px;
+  width: var(--tap); height: var(--tap);
+  border-radius: 12px;
   border: 2px solid var(--line);
   background: transparent;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  transition: transform .1s ease;
 }
+.set:active { transform: scale(.9); }
 .set.done { color: #08110c; font-weight: 700; }
 /* a logged set shows the reps performed instead of its number; hitting the top
    of the range gets a ring so a good session is readable at a glance */
-.set.has-reps { font-size: 15px; }
+.set.has-reps { font-size: 16px; }
 .set.at-top { box-shadow: 0 0 0 2px rgba(53,208,127,.32); }
 
 .weight {
@@ -251,21 +356,30 @@ li.done .tick, .set.done { border-color: var(--good); background: var(--good); c
   font-variant-numeric: tabular-nums;
   padding: 5px 0;
 }
-.weight input::placeholder { color: #5a6377; font-weight: 500; }
+.weight input::placeholder { color: var(--muted); font-weight: 500; }
 .weight input:focus { outline: none; }
 .weight span { font-size: 12px; color: var(--muted); }
 
 .mini-btn {
+  position: relative;
   background: var(--surface-2);
   border: 1px solid var(--line);
   color: var(--muted);
-  width: 30px; height: 30px;
-  border-radius: 9px;
-  font-size: 15px;
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  font-size: 17px;
   line-height: 1;
   flex-shrink: 0;
+  transition: transform .1s ease;
 }
-.mini-btn:active { background: var(--line); color: var(--text); }
+/* 40px reads better in a card than a full 44 does, so the visible button stays
+   40 and the *hit* area is pushed out to the iOS minimum invisibly. */
+.mini-btn::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+}
+.mini-btn:active { background: var(--line); color: var(--text); transform: scale(.92); }
 
 .finisher {
   background: var(--surface);
@@ -304,7 +418,16 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 14px;
 }
 .ghost:active { background: var(--surface); }
-.ghost.danger { color: #ff6b6b; border-color: #472530; }
+/* Separated from the accent by form, not just hue — a tinted fill and a heavier
+   weight, so it never reads as "another orange button" even though orange and
+   red are neighbours on the wheel. */
+.ghost.danger {
+  color: var(--danger);
+  border-color: var(--danger-line);
+  background: rgba(255, 107, 107, .08);
+  font-weight: 600;
+}
+.ghost.danger:active { background: rgba(255, 107, 107, .16); }
 
 /* ---------- body weight ---------- */
 .bw-card { background: var(--surface); border-radius: var(--radius); padding: 16px 15px 14px; }
@@ -333,7 +456,7 @@ button { font-family: inherit; cursor: pointer; }
   min-width: 0;
 }
 .bw-entry input:focus { outline: none; border-color: var(--accent); }
-.bw-entry input::placeholder { color: #5a6377; }
+.bw-entry input::placeholder { color: var(--muted); }
 .bw-entry button {
   background: var(--accent);
   color: #170c04;
@@ -345,16 +468,88 @@ button { font-family: inherit; cursor: pointer; }
 }
 .bw-entry button:active { background: #e56a22; }
 
+/* ---------- progress chapters ----------
+   The page used to be eight equal blocks with no headings, four of which
+   said the same thing about lifts. Three chapters give it a spine: are you
+   showing up, are you getting stronger, what is your weight doing. */
+.chapter {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 26px 4px 10px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line);
+}
+.chapter:first-child { margin-top: 16px; }
+.chapter h2 { font-size: 19px; letter-spacing: -.018em; font-weight: 660; }
+.chapter-note {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.chapter-actions { display: flex; gap: 7px; flex-shrink: 0; }
+.chip-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 9px;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chip-btn:active { background: var(--line); color: var(--text); }
+
+/* ---------- one lift, one row ---------- */
+.lift {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 15px;
+  min-height: 56px;
+}
+.lift-main { flex: 1; min-width: 0; }
+.lift-name { display: block; font-size: 15px; font-weight: 560; letter-spacing: -.008em; }
+.lift-sub {
+  display: block;
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+/* sparkSvg emits class="spark lift-spark", so this MUST stay below the .spark
+   rule above — same specificity, and .spark sets a full-width 62px-tall chart
+   that would otherwise win and blow the row open. */
+.lift-spark {
+  width: 62px;
+  height: 24px;
+  flex: none;
+  margin: 0;
+}
+/* keeps the value column aligned when a lift has too little history to plot */
+.lift-spark-gap { width: 62px; flex: none; }
+.lift-val { text-align: right; flex: none; min-width: 56px; }
+.lift-val .lift-now {
+  font-size: 15.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.lift-goal {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+  padding: 1px 0 1px 6px;   /* a little slack so the chip is its own target */
+}
+.lift-goal.hit { color: var(--good); }
+
 /* ---------- maxes ---------- */
 .log-list li.tappable { cursor: pointer; }
 .log-list li.tappable:active { background: var(--surface-2); }
-.max-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.max-name { font-size: 15px; }
-.max-sub { font-size: 12px; color: var(--muted); }
-.max-val { margin-left: auto; text-align: right; flex-shrink: 0; }
-.max-weight { font-size: 16px; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--accent); }
-.max-1rm { display: block; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
-
 .max-fields { display: flex; gap: 10px; }
 .max-fields label {
   flex: 1;
@@ -417,9 +612,12 @@ button { font-family: inherit; cursor: pointer; }
   display: grid;
   place-items: center;
   font-size: 10px;
-  color: #5a6377;
+  color: var(--muted);   /* was #5a6377 — 2.58:1, below the readable floor */
 }
-.cal-cell.done { background: var(--accent); color: #170c04; font-weight: 700; }
+/* A finished workout is the same idea as a finished set, so it is the same
+   green. It used to be orange, which made "done" mean two different colours
+   depending on which screen you were looking at. */
+.cal-cell.done { background: var(--good); color: #08110c; font-weight: 700; }
 .cal-cell.today { box-shadow: inset 0 0 0 2px var(--text); }
 .cal-cell.future { opacity: .3; }
 .cal-cell.has-log { cursor: pointer; }
@@ -508,33 +706,6 @@ button { font-family: inherit; cursor: pointer; }
   vertical-align: 1px;
   white-space: nowrap;
 }
-.goal-row { display: block; }
-.goal-row .goal-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.goal-row .goal-val {
-  color: var(--muted);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.goal-bar {
-  height: 6px;
-  background: var(--surface-2);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.goal-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 3px;
-}
-.goal-row.achieved .goal-fill { background: var(--good); }
-.goal-row.achieved .goal-val { color: var(--good); }
 .goal-group {
   font-size: 12px;
   font-weight: 700;
@@ -555,7 +726,6 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 15px;
 }
 .log-list li:last-child { border-bottom: 0; }
-.log-list .l-date { color: var(--muted); font-size: 13px; min-width: 62px; }
 .log-list .l-val { margin-left: auto; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 .log-list .empty { color: var(--muted); font-size: 14px; justify-content: center; }
 
@@ -631,14 +801,32 @@ input:checked + .switch::after { transform: translateX(18px); background: #170c0
   border: 0;
   color: var(--muted);
   font-size: 11px;
-  padding: 9px 0 8px;
+  font-weight: 550;
+  padding: 8px 0 7px;
+  min-height: var(--tap);
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 3px;
 }
 .tabbar button.active { color: var(--accent); }
-.tabbar .ico { font-size: 17px; line-height: 1; }
+/* Drawn as SVG rather than typed as ● ▣ ⚙ — those are text glyphs, they render
+   at a different weight and baseline on every platform, and they were the
+   loudest tell that this was a web page wearing an app costume. */
+.tabbar .ico {
+  width: 23px;
+  height: 23px;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke-width .14s ease;
+}
+.tabbar button.active .ico { stroke-width: 2.4; }
+.tabbar button:active .ico { transform: scale(.9); }
 
 /* ---------- overlays ---------- */
 .rest, .sheet {
@@ -659,6 +847,14 @@ input:checked + .switch::after { transform: translateX(18px); background: #170c0
   align-items: flex-end;
   padding-top: calc(20px + var(--safe-top));
 }
+/* Both overlays animate in. Nothing in app.js changes for this: an element
+   going from display:none to displayed restarts its animations, and every
+   sheet is toggled with the `hidden` attribute, so the entrance replays each
+   time one opens. Exit stays instant — animating that would mean threading a
+   callback through all thirty call sites for a frame nobody looks at. */
+.rest, .sheet { animation: overlay-in .17s ease-out; }
+@keyframes overlay-in { from { opacity: 0; } }
+
 .rest-card {
   background: var(--surface);
   border-radius: 22px;
@@ -667,7 +863,9 @@ input:checked + .switch::after { transform: translateX(18px); background: #170c0
   width: 100%;
   max-width: 320px;
   border: 1px solid var(--line);
+  animation: rest-in .2s cubic-bezier(.32, .72, 0, 1);
 }
+@keyframes rest-in { from { transform: scale(.93); opacity: 0; } }
 .rest-label { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
 .rest-time { font-size: 62px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.05; margin: 6px 0 2px; }
 .rest-next { font-size: 14px; color: var(--muted); min-height: 20px; }
@@ -703,7 +901,9 @@ input:checked + .switch::after { transform: translateX(18px); background: #170c0
   max-height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
+  animation: sheet-up .26s cubic-bezier(.32, .72, 0, 1);
 }
+@keyframes sheet-up { from { transform: translateY(16px); opacity: 0; } }
 .sheet-card h2 { font-size: 19px; margin-bottom: 14px; }
 .focus-opt {
   display: flex;
@@ -724,8 +924,55 @@ input:checked + .switch::after { transform: translateX(18px); background: #170c0
 .focus-opt.on { border-color: var(--accent); }
 .focus-opt.on::after { content: '\2713'; margin-left: auto; color: var(--accent); font-size: 18px; }
 
+/* ---------- launch splash ----------
+   Not covering a load: the whole app is cached and paints in under a frame.
+   This is a deliberate held second, so it is worth it being quiet. */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;              /* above the tab bar (20) and every sheet (40) */
+  background: var(--bg);
+  display: grid;
+  place-items: center;
+}
+.splash.done {
+  opacity: 0;
+  pointer-events: none;      /* stops eating taps the moment the fade starts */
+  transition: opacity .34s ease-in;
+}
+/* Tracking comes from the flex gap alone. Using letter-spacing as well would
+   apply it twice — once inside each single-character span, once between them —
+   and the trailing space on the last letter drags the block off centre. */
+.splash-word {
+  display: flex;
+  gap: .30em;
+  font-size: 30px;
+  font-weight: 750;
+}
+.splash-word span {
+  display: inline-block;
+  animation: splash-letter .44s cubic-bezier(.2, .9, .3, 1) both;
+}
+.splash-word .accent { color: var(--accent); }
+.splash-word span:nth-child(1) { animation-delay: .02s; }
+.splash-word span:nth-child(2) { animation-delay: .09s; }
+.splash-word span:nth-child(3) { animation-delay: .16s; }
+.splash-word span:nth-child(4) { animation-delay: .23s; }
+.splash-word span:nth-child(5) { animation-delay: .30s; }
+@keyframes splash-letter {
+  from { opacity: 0; transform: translateY(13px); }
+  to   { opacity: 1; transform: none; }
+}
+
 .spacer { height: 24px; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
+  /* Named rather than a blanket `* { animation: none }` so the rest-over pulse
+     keeps its own reduced-motion fallback below — that one is a safety cue on a
+     silenced phone, not decoration. */
+  .rest, .sheet, .rest-card, .sheet-card { animation: none; }
+  /* the wordmark still shows, it just stops moving */
+  .splash-word span { animation: none; opacity: 1; }
+  .splash.done { transition: opacity .01ms; }
 }

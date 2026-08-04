@@ -204,6 +204,12 @@ const exById = exerciseById;
 /* ======================= rendering ======================= */
 
 let plan = null;
+
+/* Which exercise is open on the Today screen. Normally the first unfinished
+   one, but tapping a collapsed row jumps to it — that override lives here.
+   Deliberately not persisted: on a fresh open you want to be back at the next
+   thing to do, not wherever you were poking around yesterday. */
+let focusedExId = null;
 const $ = id => document.getElementById(id);
 
 /* Tapping a set is the main interaction in the app, so it carries a lot:
@@ -268,6 +274,12 @@ function logSet(item, s, doneSets, range, rec, key) {
   }
 
   const nowDone = rec.sets[item.ex.id] || 0;
+
+  /* Finishing the exercise you are on hands the card to the next one. Doing
+     it here rather than in the render is what keeps a finished row reopenable
+     — the render must not undo a focus you just asked for. */
+  if (focusedExId === item.ex.id && nowDone >= item.sets) focusedExId = null;
+
   persist();
   checkGoals();
   renderToday();
@@ -284,8 +296,13 @@ function renderToday() {
   const rec = record(key);
   const d = keyToDate(key);
 
-  const dateStr = d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
   const name = (settings.profile.name || '').trim();
+  /* A greeting in front of a long weekday overruns the space left by the
+     streak pill and wraps onto a second line — "Afternoon, Peter · Tuesday,
+     Aug 4" does not fit 390px. Shorten the weekday only when there is a
+     greeting to make room for. */
+  const dateStr = d.toLocaleDateString(undefined,
+    { weekday: name ? 'short' : 'long', month: 'short', day: 'numeric' });
   if (name) {
     const h = new Date().getHours();
     const hello = h < 5 ? 'Up late' : h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening';
@@ -294,8 +311,17 @@ function renderToday() {
     $('hdr-date').textContent = dateStr;
   }
   $('hdr-focus').textContent = plan.focus.label;
-  $('hdr-blurb').textContent = plan.focus.blurb;
-  $('main-note').textContent = '~' + plan.minutes + ' min total';
+
+  /* The focus blurb ("Conditioning and midsection") only restated the label
+     above it. What is actually worth the line is the shape of the session you
+     are about to start — how much work, and how long it will take. */
+  const mainSets = plan.main.reduce((a, m) => a + m.sets, 0);
+  const exCount  = plan.main.length;
+  $('hdr-blurb').textContent =
+    mainSets + ' set' + (mainSets === 1 ? '' : 's') +
+    ' · ~' + plan.minutes + ' min';
+  /* the time estimate now lives in the header, so this stops repeating it */
+  $('main-note').textContent = exCount + ' exercise' + (exCount === 1 ? '' : 's');
 
   /* warm-up */
   const wl = $('warmup-list');
@@ -319,14 +345,67 @@ function renderToday() {
     : '';
   const ml = $('main-list');
   ml.innerHTML = '';
-  plan.main.forEach(item => {
-    const doneSets = rec.sets[item.ex.id] || 0;
-    const card = document.createElement('div');
-    card.className = 'ex' + (doneSets >= item.sets ? ' complete' : '');
 
-    const dose = item.ex.type === 'cardio' || item.ex.type === 'mobility'
-      ? (item.sets > 1 ? item.sets + ' × ' + item.reps : item.reps)
-      : item.sets + ' × ' + item.reps;
+  const setsDone = m => rec.sets[m.ex.id] || 0;
+  const doseOf = m => (m.ex.type === 'cardio' || m.ex.type === 'mobility')
+    ? (m.sets > 1 ? m.sets + ' × ' + m.reps : m.reps)
+    : m.sets + ' × ' + m.reps;
+
+  /* Only drop the override if the exercise left today's plan — a swap, or a
+     focus carried over from a previous day. Advancing off a *finished*
+     exercise happens in logSet, so that tapping a completed row here can
+     still reopen it to correct a miscount. */
+  if (focusedExId && !plan.main.some(m => m.ex.id === focusedExId)) focusedExId = null;
+  const nextUp = plan.main.find(m => setsDone(m) < m.sets);
+  const activeId = focusedExId || (nextUp ? nextUp.ex.id : null);
+
+  /* Everything that is not in play collapses to a single row. Consecutive
+     rows share one container so they read as a list rather than as a run of
+     little cards — the same shape the warm-up already uses. */
+  let stack = null;
+  function pushLine(node) {
+    if (!stack) {
+      stack = document.createElement('div');
+      stack.className = 'stack';
+      ml.appendChild(stack);
+    }
+    stack.appendChild(node);
+  }
+  function makeLine(item) {
+    const done = setsDone(item);
+    const finished = done >= item.sets;
+    const row = document.createElement('div');
+    row.className = 'ex-line' + (finished ? ' is-done' : done > 0 ? ' is-part' : '');
+    row.innerHTML =
+      '<span class="l-tick">&#10003;</span>' +
+      '<span class="l-name">' + esc(item.ex.name) + '</span>' +
+      '<span class="l-dose">' +
+        (done > 0 && !finished ? done + ' of ' + item.sets : esc(doseOf(item))) +
+      '</span>';
+    row.setAttribute('role', 'button');
+    row.setAttribute('tabindex', '0');
+    row.setAttribute('aria-label', 'Open ' + item.ex.name);
+    row.onclick = () => { focusedExId = item.ex.id; renderToday(); };
+    return row;
+  }
+
+  plan.main.forEach(item => {
+    const doneSets = setsDone(item);
+
+    if (item.ex.id !== activeId) {
+      pushLine(makeLine(item));
+      return;
+    }
+    stack = null;   // the active card breaks the run of rows
+
+    const card = document.createElement('div');
+    card.className = 'ex is-active' + (doneSets >= item.sets ? ' complete' : '');
+    const nowLabel = document.createElement('span');
+    nowLabel.className = 'now-label';
+    nowLabel.textContent = 'Now';
+    card.appendChild(nowLabel);
+
+    const dose = doseOf(item);
 
     const top = document.createElement('div');
     top.className = 'ex-top';
@@ -520,7 +599,12 @@ function renderToday() {
   btn.textContent = rec.complete ? '✓ Logged for today' : 'Mark workout complete';
   btn.classList.toggle('done', !!rec.complete);
 
-  $('hdr-streak').querySelector('.streak-num').textContent = streak();
+  /* A zero streak is the one number nobody wants staring back at them, and it
+     was holding prime space in the header to say nothing. It reappears the
+     moment there is a streak to show. */
+  const s = streak();
+  $('hdr-streak').hidden = s === 0;
+  $('hdr-streak').querySelector('.streak-num').textContent = s;
 }
 
 function esc(s) {
@@ -657,37 +741,6 @@ function logBodyweight() {
 
 /* ======================= maxes ======================= */
 
-function renderMaxes() {
-  const list = $('max-list');
-  list.innerHTML = '';
-  const rows = Object.entries(maxes)
-    .map(([id, m]) => [exById(id), m])
-    .filter(([e]) => e)
-    .sort((a, b) => a[0].name.localeCompare(b[0].name));
-
-  if (!rows.length) {
-    list.innerHTML = '<li class="empty">No maxes yet. Tap ＋ to add one, or hit “PR?” on a lift during a session.</li>';
-    return;
-  }
-  for (const [ex, m] of rows) {
-    const est = e1rm(m.weight, m.reps);
-    const li = document.createElement('li');
-    li.className = 'tappable';
-    li.innerHTML =
-      '<span class="max-main">' +
-        '<span class="max-name">' + esc(ex.name) + '</span>' +
-        '<span class="max-sub">' + esc(m.reps) + ' rep' + (m.reps == 1 ? '' : 's') +
-          (m.date ? ' · ' + keyToDate(m.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '') +
-        '</span>' +
-      '</span>' +
-      '<span class="max-val">' +
-        '<span class="max-weight">' + esc(m.weight) + ' ' + settings.units + '</span>' +
-        (est && m.reps > 1 ? '<span class="max-1rm">~' + est + ' est. 1RM</span>' : '') +
-      '</span>';
-    li.onclick = () => openMaxSheet(ex.id);
-    list.appendChild(li);
-  }
-}
 
 let maxSheetId = null;
 
@@ -780,36 +833,6 @@ function goalUnitLabel(g) {
   return g.type === 'reps' ? 'reps' : settings.units;
 }
 
-function renderGoals() {
-  const list = $('goal-list');
-  list.innerHTML = '';
-  const rows = Object.entries(goals)
-    .map(([id, g]) => [exById(id), g])
-    .filter(([e, g]) => e && g)
-    .sort((a, b) => (!!a[1].achieved - !!b[1].achieved) || a[0].name.localeCompare(b[0].name));
-
-  if (!rows.length) {
-    list.innerHTML = '<li class="empty">Chasing a number? Tap ＋ — the workouts will aim at it.</li>';
-    return;
-  }
-  for (const [ex, g] of rows) {
-    const cur = goalCurrent(ex.id, g);
-    const pct = Math.max(0, Math.min(100, g.target > 0 ? (cur / g.target) * 100 : 0));
-    const li = document.createElement('li');
-    li.className = 'tappable goal-row' + (g.achieved ? ' achieved' : '');
-    li.innerHTML =
-      '<div class="goal-top">' +
-        '<span class="max-name">' + esc(ex.name) + '</span>' +
-        '<span class="goal-val">' + (g.achieved
-          ? '&#10003; ' + esc(g.target) + ' ' + goalUnitLabel(g) + ' · ' +
-            keyToDate(g.achieved).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-          : esc(cur) + ' → ' + esc(g.target) + ' ' + goalUnitLabel(g)) + '</span>' +
-      '</div>' +
-      '<div class="goal-bar"><div class="goal-fill" style="width:' + pct.toFixed(1) + '%"></div></div>';
-    li.onclick = () => openGoalSheet(ex.id);
-    list.appendChild(li);
-  }
-}
 
 let goalSheetId = null;
 
@@ -898,48 +921,88 @@ function sparkSvg(pts, W, H) {
     '</svg>';
 }
 
-function renderLiftTrends() {
-  const list = $('lift-trend-list');
+/* One row per lift.
+
+   This replaces four lists that each named the same lifts from a different
+   angle — maxes, goals, trends, and last working weights — and so said a
+   lift's name four times down one page while never showing you the whole
+   picture of any of them in one place. Nothing new is stored: the row is a
+   join over data that already existed. */
+function renderLifts() {
+  const list = $('lift-list');
   list.innerHTML = '';
+
   const cutoff = dayNumber(today()) - 90;
-  const rows = Object.keys(weights)
-    .map(id => [exById(id), liftSeries(id).filter(([k]) => dayNumber(k) >= cutoff)])
-    .filter(([e, pts]) => e && e.load && pts.length >= 2)
-    // most recently trained first
-    .sort((a, b) => b[1][b[1].length - 1][0].localeCompare(a[1][a[1].length - 1][0]))
-    .slice(0, 8);
+  const ids = new Set([...Object.keys(weights), ...Object.keys(maxes), ...Object.keys(goals)]);
+
+  const rows = [...ids]
+    .map(id => {
+      const ex = exById(id);
+      return ex ? { id, ex, m: maxes[id], g: goals[id], w: weights[id],
+                    pts: liftSeries(id).filter(([k]) => dayNumber(k) >= cutoff) } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.ex.name.localeCompare(b.ex.name));
 
   if (!rows.length) {
-    list.innerHTML = '<li class="empty">Log a lift with a weight on two different days and its trend shows up here.</li>';
+    list.innerHTML = '<li class="empty">Log a lift with a weight, or add a max, and it shows up here.</li>';
     return;
   }
-  for (const [ex, pts] of rows) {
-    const latest = pts[pts.length - 1][1];
-    const diff = Math.round(latest - pts[0][1]);
-    const sign = diff > 0 ? '+' : diff < 0 ? '−' : '±';
+
+  for (const r of rows) {
+    /* the sub-line carries whatever is known, in a fixed order, so rows stay
+       scannable even when a lift has only some of it */
+    const bits = [];
+    if (r.w) bits.push(esc(r.w) + ' ' + settings.units + ' working');
+    if (r.m) {
+      const est = e1rm(r.m.weight, r.m.reps);
+      bits.push(est && r.m.reps > 1 ? 'est. 1RM ' + est
+                                    : 'best ' + esc(r.m.weight) + ' ' + settings.units);
+    }
+
+    let goalHtml = '';
+    if (r.g) {
+      goalHtml = r.g.achieved
+        ? '<span class="lift-goal hit">&#10003; ' + esc(r.g.target) + '</span>'
+        : '<span class="lift-goal">&#8594; ' + esc(r.g.target) + '</span>';
+    }
+
     const li = document.createElement('li');
-    li.className = 'lift-trend';
+    li.className = 'lift tappable';
     li.innerHTML =
-      '<span class="max-main">' +
-        '<span class="max-name">' + esc(ex.name) + '</span>' +
-        '<span class="max-sub">' + sign + Math.abs(diff) + ' ' + settings.units + ' over ' + pts.length + ' sessions</span>' +
+      '<span class="lift-main">' +
+        '<span class="lift-name">' + esc(r.ex.name) + '</span>' +
+        (bits.length ? '<span class="lift-sub">' + bits.join(' · ') + '</span>' : '') +
       '</span>' +
-      sparkSvg(pts, 96, 30) +
-      '<span class="lift-now">~' + Math.round(latest) + '</span>';
+      (r.pts.length >= 2 ? sparkSvg(r.pts, 62, 24) : '<span class="lift-spark-gap"></span>') +
+      '<span class="lift-val">' +
+        '<span class="lift-now">' + (r.m ? esc(r.m.weight) : (r.w ? esc(r.w) : '—')) + '</span>' +
+        goalHtml +
+      '</span>';
+
+    /* the row edits the max; the goal chip edits the goal */
+    li.onclick = () => openMaxSheet(r.id);
+    const chip = li.querySelector('.lift-goal');
+    if (chip) chip.onclick = e => { e.stopPropagation(); openGoalSheet(r.id); };
+
     list.appendChild(li);
   }
 }
 
 function renderHistory() {
   renderBodyweight();
-  renderMaxes();
-  renderGoals();
-  renderLiftTrends();
+  renderLifts();
   const done = Object.entries(logs).filter(([, v]) => v.complete);
   $('stat-streak').textContent = streak();
   $('stat-total').textContent = done.length;
   const mk = today().slice(0, 7);
   $('stat-month').textContent = done.filter(([k]) => k.startsWith(mk)).length;
+
+  /* how long this has been going, for the Consistency chapter */
+  const first = done.map(([k]) => k).sort()[0];
+  $('consistency-note').textContent = first
+    ? Math.max(1, Math.round((dayNumber(today()) - dayNumber(first)) / 7)) + ' weeks in'
+    : 'just starting';
 
   /* 6-week calendar, weeks starting Sunday */
   const cal = $('cal');
@@ -984,40 +1047,9 @@ function renderHistory() {
     cal.appendChild(row);
   }
 
-  /* recent sessions */
-  const ll = $('log-list');
-  ll.innerHTML = '';
-  const recent = done.sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12);
-  if (!recent.length) {
-    ll.innerHTML = '<li class="empty">Nothing logged yet. Go do today’s.</li>';
-  } else {
-    recent.forEach(([k, v]) => {
-      const li = document.createElement('li');
-      const label = (FOCI[v.focus] && FOCI[v.focus].label) || 'Workout';
-      li.innerHTML =
-        '<span class="l-date">' + keyToDate(k).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + '</span>' +
-        '<span>' + esc(label) + '</span>';
-      ll.appendChild(li);
-    });
-  }
-
-  /* working weights */
-  const wl = $('weights-list');
-  wl.innerHTML = '';
-  const entries = Object.entries(weights);
-  if (!entries.length) {
-    wl.innerHTML = '<li class="empty">Log a weight and it shows up here.</li>';
-  } else {
-    entries
-      .map(([id, v]) => [EXERCISES.find(e => e.id === id), v])
-      .filter(([e]) => e)
-      .sort((a, b) => a[0].name.localeCompare(b[0].name))
-      .forEach(([e, v]) => {
-        const li = document.createElement('li');
-        li.innerHTML = '<span>' + esc(e.name) + '</span><span class="l-val">' + esc(v) + ' ' + settings.units + '</span>';
-        wl.appendChild(li);
-      });
-  }
+  /* "Recent sessions" and "Last working weights" used to render here. The
+     calendar above already shows which days were trained and its cells open
+     the day; the working weight now sits on each lift's row. */
 }
 
 /* ======================= past day viewer ======================= */
@@ -1358,6 +1390,26 @@ function openFocusSheet() {
 
 /* ======================= wiring ======================= */
 
+/* The header belongs to the view, not to the day. It used to keep announcing
+   "Engine + Core · 10 sets · ~30 min" while you were looking at three months
+   of history, which read as a bug. The streak hides on the other two views —
+   Progress already gives it a tile of its own, and Settings has no use for it. */
+function setHeader(view) {
+  if (view === 'today') { renderToday(); return; }
+
+  if (view === 'progress') {
+    const done = Object.values(logs).filter(v => v.complete).length;
+    $('hdr-date').textContent = 'Your training';
+    $('hdr-focus').textContent = 'Progress';
+    $('hdr-blurb').textContent = done + ' session' + (done === 1 ? '' : 's') + ' logged';
+  } else {
+    $('hdr-date').textContent = 'Daily Workout';
+    $('hdr-focus').textContent = 'Settings';
+    $('hdr-blurb').textContent = 'Everything stays on this device';
+  }
+  $('hdr-streak').hidden = true;
+}
+
 document.querySelectorAll('.tabbar button').forEach(b => {
   b.onclick = () => {
     document.querySelectorAll('.tabbar button').forEach(x => x.classList.remove('active'));
@@ -1366,6 +1418,7 @@ document.querySelectorAll('.tabbar button').forEach(b => {
     $('view-' + b.dataset.view).classList.add('active');
     if (b.dataset.view === 'progress') renderHistory();
     if (b.dataset.view === 'settings') renderSettings();
+    setHeader(b.dataset.view);
     window.scrollTo(0, 0);
   };
 });
@@ -1432,8 +1485,7 @@ $('max-save').onclick = () => {
   persist();
   checkGoals();
   $('max-sheet').hidden = true;
-  renderMaxes();
-  renderGoals();
+  renderLifts();
   renderToday();   // clears the PR chip now that the max is banked
   if (navigator.vibrate) navigator.vibrate(30);
 };
@@ -1442,7 +1494,7 @@ $('max-clear').onclick = () => {
   if (maxSheetId) delete maxes[maxSheetId];
   persist();
   $('max-sheet').hidden = true;
-  renderMaxes();
+  renderLifts();
   renderToday();
 };
 
@@ -1599,7 +1651,7 @@ $('goal-save').onclick = () => {
   persist();
   goalSheetId = null;
   $('goal-sheet').hidden = true;
-  renderGoals();
+  renderLifts();
   renderToday();   // pin may change today's plan
   if (navigator.vibrate) navigator.vibrate(30);
 };
@@ -1608,7 +1660,7 @@ $('goal-delete').onclick = () => {
   persist();
   goalSheetId = null;
   $('goal-sheet').hidden = true;
-  renderGoals();
+  renderLifts();
   renderToday();
 };
 
@@ -1756,6 +1808,32 @@ document.addEventListener('visibilitychange', () => {
     else acquireWakeLock();
   }
 });
+
+/* Collapse the sticky header once you are into the workout. Two thresholds
+   rather than one so the bar cannot flicker when a scroll settles right on the
+   boundary, and the read is deferred to rAF so it never lands mid-frame. */
+(function stickyHeader() {
+  const COLLAPSE = 56, EXPAND = 24;
+  let collapsed = false, queued = false;
+
+  function measure() {
+    queued = false;
+    const y = window.scrollY;
+    if (!collapsed && y > COLLAPSE) {
+      collapsed = true;
+      document.body.classList.add('scrolled');
+    } else if (collapsed && y < EXPAND) {
+      collapsed = false;
+      document.body.classList.remove('scrolled');
+    }
+  }
+
+  window.addEventListener('scroll', () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(measure);
+  }, { passive: true });
+})();
 
 renderToday();
 

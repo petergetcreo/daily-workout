@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<!-- maximum-scale dropped on purpose: it blocked pinch-zoom, which is the one
+     accessibility affordance a phone user cannot work around. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0e1014">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -13,6 +15,32 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+<!-- Launch splash. The native launch screen is the same #0e1014, so from the
+     home-screen tap to the first exercise this stays one unbroken dark field.
+     Dismissal is inline and below, deliberately not in app.js: if app.js ever
+     throws while booting, this must still come down. -->
+<div class="splash" id="splash" aria-hidden="true">
+  <div class="splash-word">
+    <span>D</span><span>A</span><span>I</span><span>L</span><span class="accent">Y</span>
+  </div>
+</div>
+<script>
+(function () {
+  var el = document.getElementById('splash');
+  if (!el) return;
+  var gone = false;
+  function dismiss() {
+    if (gone) return;
+    gone = true;
+    el.classList.add('done');
+    /* removed rather than left at opacity 0 — a full-screen layer that stays
+       in the tree will happily swallow the first tap of the session */
+    setTimeout(function () { el.remove(); }, 400);
+  }
+  setTimeout(dismiss, 1000);
+})();
+</script>
 
 <header class="topbar">
   <div class="topbar-main">
@@ -87,11 +115,41 @@
   <!-- ============ PROGRESS ============ -->
   <section id="view-progress" class="view">
 
+    <!-- Three chapters, in the order the questions actually get asked:
+         am I showing up, am I getting stronger, what is my weight doing. -->
+
+    <div class="chapter">
+      <h2>Consistency</h2>
+      <span class="chapter-note" id="consistency-note"></span>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat"><span class="stat-num" id="stat-streak">0</span><span class="stat-label">streak</span></div>
+      <div class="stat"><span class="stat-num" id="stat-total">0</span><span class="stat-label">total</span></div>
+      <div class="stat"><span class="stat-num" id="stat-month">0</span><span class="stat-label">this month</span></div>
+    </div>
+
     <div class="block">
-      <div class="block-head">
-        <h2>Body weight</h2>
-        <span class="block-note" id="bw-delta"></span>
-      </div>
+      <div class="cal" id="cal"></div>
+    </div>
+
+    <!-- One row per lift. This replaces four separate lists that each named
+         the same lifts: maxes, goals, trends, and last working weights. -->
+    <div class="chapter">
+      <h2>Strength</h2>
+      <span class="chapter-actions">
+        <button class="chip-btn" id="max-add">+ Max</button>
+        <button class="chip-btn" id="goal-add">+ Goal</button>
+      </span>
+    </div>
+    <ul class="log-list" id="lift-list"></ul>
+
+    <div class="chapter">
+      <h2>Body</h2>
+      <span class="chapter-note" id="bw-delta"></span>
+    </div>
+
+    <div class="block">
       <div class="bw-card">
         <div class="bw-top">
           <div class="bw-nowrap">
@@ -106,51 +164,6 @@
           <button id="bw-log">Log</button>
         </div>
       </div>
-    </div>
-
-    <div class="block">
-      <div class="block-head">
-        <h2>Goals</h2>
-        <button class="mini-btn" id="goal-add" aria-label="Add a goal">+</button>
-      </div>
-      <ul class="log-list" id="goal-list"></ul>
-    </div>
-
-    <div class="block">
-      <div class="block-head">
-        <h2>Maxes</h2>
-        <button class="mini-btn" id="max-add" aria-label="Add a max">+</button>
-      </div>
-      <ul class="log-list" id="max-list"></ul>
-    </div>
-
-    <div class="block">
-      <div class="block-head">
-        <h2>Lift trends</h2>
-        <span class="block-note">est. 1RM, last 90 days</span>
-      </div>
-      <ul class="log-list" id="lift-trend-list"></ul>
-    </div>
-
-    <div class="stats-row">
-      <div class="stat"><span class="stat-num" id="stat-streak">0</span><span class="stat-label">streak</span></div>
-      <div class="stat"><span class="stat-num" id="stat-total">0</span><span class="stat-label">total</span></div>
-      <div class="stat"><span class="stat-num" id="stat-month">0</span><span class="stat-label">this month</span></div>
-    </div>
-
-    <div class="block">
-      <div class="block-head"><h2>Last 6 weeks</h2></div>
-      <div class="cal" id="cal"></div>
-    </div>
-
-    <div class="block">
-      <div class="block-head"><h2>Recent sessions</h2></div>
-      <ul class="log-list" id="log-list"></ul>
-    </div>
-
-    <div class="block">
-      <div class="block-head"><h2>Last working weights</h2></div>
-      <ul class="log-list" id="weights-list"></ul>
     </div>
     <div class="spacer"></div>
   </section>
@@ -213,9 +226,22 @@
 </main>
 
 <nav class="tabbar">
-  <button data-view="today" class="active"><span class="ico">&#9679;</span>Today</button>
-  <button data-view="progress"><span class="ico">&#9635;</span>Progress</button>
-  <button data-view="settings"><span class="ico">&#9881;</span>Settings</button>
+  <!-- Icons drawn inline rather than typed as glyphs: a dumbbell for the day's
+       work, a rising bar chart for progress, sliders for settings. -->
+  <button data-view="today" class="active">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3.25 9.5v5M6.25 7v10M17.75 7v10M20.75 9.5v5M6.25 12h11.5"/>
+    </svg>Today</button>
+  <button data-view="progress">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3.5 20.25h17M7 20.25v-5.5M12 20.25v-10M17 20.25v-14"/>
+    </svg>Progress</button>
+  <button data-view="settings">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3.5 8.5h17M3.5 15.5h17"/>
+      <circle cx="15.5" cy="8.5" r="2.6"/>
+      <circle cx="8.5" cy="15.5" r="2.6"/>
+    </svg>Settings</button>
 </nav>
 
 <!-- rest timer overlay -->
