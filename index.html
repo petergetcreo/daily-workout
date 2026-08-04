@@ -52,12 +52,16 @@
     <span class="streak-num">0</span>
     <span class="streak-label">day<br>streak</span>
   </div>
+  <!-- Rides the header's bottom edge rather than floating below it. At zero it
+       is indistinguishable from the hairline that was already there, so it
+       stops reading as a stray divider, and it stays visible when the header
+       collapses on scroll. -->
+  <div class="progressbar"><div class="progressbar-fill" id="progress-fill"></div></div>
 </header>
 
 <main>
   <!-- ============ TODAY ============ -->
   <section id="view-today" class="view active">
-    <div class="progressbar"><div class="progressbar-fill" id="progress-fill"></div></div>
 
     <div class="block onboard" id="onboard" hidden>
       <div class="block-head"><h2>How logging works</h2></div>

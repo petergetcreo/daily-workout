@@ -50,6 +50,7 @@ h1, h2 { margin: 0; font-weight: 650; }
    scrolling trades the blurb and half the type size for a compact bar that
    stays put. `.scrolled` is toggled on <body> from app.js. */
 .topbar {
+  /* also the positioning context the progress line anchors to */
   position: sticky;
   top: 0;
   z-index: 15;
@@ -140,19 +141,25 @@ body.scrolled .streak-num { font-size: 19px; }
 .block-note { font-size: 12px; color: var(--muted); }
 .hint { font-size: 13px; color: var(--muted); margin: 0 4px 12px; }
 
+/* Sits on the header's bottom edge, over the hairline. No track of its own —
+   an empty 4px trough floating under a border just read as a second divider,
+   which is what this was doing before. At zero there is nothing to see; as
+   sets get logged an orange line grows along the edge, and it rides the sticky
+   header so it stays with you through the workout. */
 .progressbar {
-  height: 4px;
-  background: var(--surface-2);
-  border-radius: 3px;
-  margin-top: 14px;
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 3px;
+  background: none;
   overflow: hidden;
+  pointer-events: none;
 }
 .progressbar-fill {
   height: 100%;
   width: 0;
   background: var(--accent);
-  border-radius: 3px;
-  transition: width .25s ease;
+  border-radius: 0 2px 2px 0;
+  transition: width .3s cubic-bezier(.32, .72, 0, 1);
 }
 
 /* ---------- warmup ---------- */
@@ -330,6 +337,15 @@ li.done .tick, .set.done { border-color: var(--good); background: var(--good); c
   transition: transform .1s ease;
 }
 .set:active { transform: scale(.9); }
+/* The single set you would tap right now. Logging is the whole point of this
+   screen and an outlined box in --line on --surface looked like a disabled
+   form field — quieter than the reroll button beside it. This is the one
+   control that should read as "press me". */
+.set.next {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(255, 122, 47, .10);
+}
 .set.done { color: #08110c; font-weight: 700; }
 /* a logged set shows the reps performed instead of its number; hitting the top
    of the range gets a ring so a good session is readable at a glance */
@@ -360,17 +376,22 @@ li.done .tick, .set.done { border-color: var(--good); background: var(--good); c
 .weight input:focus { outline: none; }
 .weight span { font-size: 12px; color: var(--muted); }
 
+/* Secondary by design. These were filled and bordered, which made rerolling an
+   exercise — something you do maybe monthly — one of the loudest objects on the
+   screen, louder than logging a set. The hit area stays 44px; only the paint
+   goes away. */
 .mini-btn {
   position: relative;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
+  background: none;
+  border: 1px solid transparent;
   color: var(--muted);
   width: 40px; height: 40px;
   border-radius: 12px;
   font-size: 17px;
   line-height: 1;
   flex-shrink: 0;
-  transition: transform .1s ease;
+  opacity: .75;
+  transition: transform .1s ease, background .12s ease, opacity .12s ease;
 }
 /* 40px reads better in a card than a full 44 does, so the visible button stays
    40 and the *hit* area is pushed out to the iOS minimum invisibly. */
@@ -379,16 +400,32 @@ li.done .tick, .set.done { border-color: var(--good); background: var(--good); c
   position: absolute;
   inset: -2px;
 }
-.mini-btn:active { background: var(--line); color: var(--text); transform: scale(.92); }
+.mini-btn:active {
+  background: var(--surface-2);
+  color: var(--text);
+  opacity: 1;
+  transform: scale(.92);
+}
 
+/* The orange left stripe is gone. It was the only element in the app wearing
+   that treatment, which made it read as leftover rather than deliberate — and
+   it spent the accent on a section you have not reached yet. The finisher now
+   sits quiet like the exercises you have not got to, and takes the same lifted
+   card the current exercise gets once it actually is your turn to do it. */
 .finisher {
   background: var(--surface);
   border-radius: var(--radius);
-  padding: 14px 15px;
-  border-left: 3px solid var(--accent);
+  padding: 13px 15px;
+  border: 1px solid transparent;
+  transition: border-color .2s ease;
 }
-.finisher-name { font-size: 17px; font-weight: 620; }
-.finisher-detail { font-size: 14px; color: var(--muted); margin-top: 5px; }
+.finisher-name { font-size: 16px; font-weight: 600; letter-spacing: -.008em; }
+.finisher-detail { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.finisher.is-active {
+  border-color: var(--line);
+  box-shadow: 0 6px 20px -10px rgba(0, 0, 0, .7);
+}
+.finisher.is-active .finisher-name { font-size: 19px; font-weight: 620; }
 
 /* ---------- buttons ---------- */
 button { font-family: inherit; cursor: pointer; }

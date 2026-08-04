@@ -513,7 +513,8 @@ function renderToday() {
     for (let s = 1; s <= item.sets; s++) {
       const b = document.createElement('button');
       const isDone = s <= doneSets;
-      b.className = 'set' + (isDone ? ' done' : '');
+      /* exactly one set is "next" — the first unlogged one */
+      b.className = 'set' + (isDone ? ' done' : s === doneSets + 1 ? ' next' : '');
 
       if (range && isDone && loggedReps[s - 1]) {
         b.textContent = loggedReps[s - 1];
@@ -581,7 +582,13 @@ function renderToday() {
   /* finisher */
   if (plan.finisher) {
     $('finisher-block').hidden = false;
-    $('finisher').innerHTML =
+    /* Once the main work is logged, the finisher is the thing you are on, so
+       it takes the same lifted card and "Now" label the current exercise had. */
+    const mainDone = plan.main.every(m => (rec.sets[m.ex.id] || 0) >= m.sets);
+    const fin = $('finisher');
+    fin.className = 'finisher' + (mainDone ? ' is-active' : '');
+    fin.innerHTML =
+      (mainDone ? '<span class="now-label">Now</span>' : '') +
       '<div class="finisher-name">' + esc(plan.finisher.name) + '</div>' +
       '<div class="finisher-detail">' + esc(plan.finisher.detail) +
         (plan.finisher.stress === 'cardio' ? hrHint : '') + '</div>';
