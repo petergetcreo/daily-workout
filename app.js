@@ -939,20 +939,53 @@ function liftSeries(exId) {
   return pts.sort((a, b) => a[0].localeCompare(b[0]));
 }
 
-function sparkSvg(pts, W, H) {
+/* Percent change from a lift's own starting point, plotted on a domain shared
+   by every row on screen.
+
+   This used to scale each lift to its own min and max and stretch it to fill
+   the box, which meant a lift that crept up two pounds in three months drew
+   exactly the same triumphant climb as one that added sixty. Every line looked
+   like excellent progress, which made the picture worse than no picture.
+
+   The domain is the largest deviation any plotted lift reaches, so nothing is
+   ever clipped, with a floor of ±MIN_SPAN% so that a set of near-flat lifts
+   does not get magnified back into drama. One domain for all rows is the point
+   — it is what makes two sparklines on this page mean the same thing. */
+const SPARK_MIN_SPAN = 5;
+
+function sparkDomain(seriesList) {
+  let worst = 0;
+  for (const pts of seriesList) {
+    if (!pts || pts.length < 2) continue;
+    const base = pts[0][1];
+    if (!base) continue;
+    for (const [, v] of pts) {
+      worst = Math.max(worst, Math.abs((v - base) / base) * 100);
+    }
+  }
+  return Math.max(SPARK_MIN_SPAN, Math.ceil(worst));
+}
+
+function sparkSvg(pts, W, H, domain) {
   const PAD = 3;
   const xs = pts.map(([k]) => dayNumber(k));
-  const ys = pts.map(([, v]) => v);
   const x0 = Math.min(...xs), spanX = (Math.max(...xs) - x0) || 1;
-  const y0 = Math.min(...ys), spanY = (Math.max(...ys) - y0) || 1;
-  const px = x => PAD + ((x - x0) / spanX) * (W - PAD * 2);
-  const py = y => H - PAD - ((y - y0) / spanY) * (H - PAD * 2);
+  const base = pts[0][1] || 1;
+  const mid = H / 2;
+  const scale = (H - PAD * 2) / (domain * 2);
+
+  const px = k => PAD + ((dayNumber(k) - x0) / spanX) * (W - PAD * 2);
+  const py = v => mid - Math.max(-domain, Math.min(domain, ((v - base) / base) * 100)) * scale;
+
   const line = pts.map(([k, v], i) =>
-    (i ? 'L' : 'M') + px(dayNumber(k)).toFixed(1) + ' ' + py(v).toFixed(1)).join(' ');
+    (i ? 'L' : 'M') + px(k).toFixed(1) + ' ' + py(v).toFixed(1)).join(' ');
   const last = pts[pts.length - 1];
-  return '<svg class="spark lift-spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true">' +
+
+  return '<svg class="spark lift-spark" viewBox="0 0 ' + W + ' ' + H + '" aria-hidden="true">' +
+    /* the line you read against: where this lift started */
+    '<path class="sp-zero" d="M' + PAD + ' ' + mid + ' L' + (W - PAD) + ' ' + mid + '"/>' +
     '<path class="sp-line" d="' + line + '"/>' +
-    '<circle class="sp-dot" cx="' + px(dayNumber(last[0])).toFixed(1) + '" cy="' + py(last[1]).toFixed(1) + '" r="2.5"/>' +
+    '<circle class="sp-dot" cx="' + px(last[0]).toFixed(1) + '" cy="' + py(last[1]).toFixed(1) + '" r="2.2"/>' +
     '</svg>';
 }
 
@@ -963,6 +996,21 @@ function sparkSvg(pts, W, H) {
    lift's name four times down one page while never showing you the whole
    picture of any of them in one place. Nothing new is stored: the row is a
    join over data that already existed. */
+/* The chart and the number it stands for, kept together. The shape says which
+   way and how steeply relative to the other lifts; the figure underneath says
+   how much, which no 62-pixel line can. Neither is much use alone. */
+function trendCell(r, domain) {
+  if (r.pts.length < 2) return '<span class="lift-spark-gap"></span>';
+  const diff = Math.round(r.pts[r.pts.length - 1][1] - r.pts[0][1]);
+  const flat = Math.abs(diff) < 3;
+  return '<span class="lift-trend">' +
+    sparkSvg(r.pts, 62, 24, domain) +
+    '<span class="lift-delta' + (flat ? ' flat' : '') + '">' +
+      (diff > 0 ? '+' : diff < 0 ? '−' : '±') + Math.abs(diff) + ' ' + settings.units +
+    '</span>' +
+  '</span>';
+}
+
 function renderLifts() {
   const list = $('lift-list');
   list.innerHTML = '';
@@ -983,6 +1031,10 @@ function renderLifts() {
     list.innerHTML = '<li class="empty">Log a lift with a weight, or add a max, and it shows up here.</li>';
     return;
   }
+
+  /* One domain for the whole list — computed before any row is drawn, because
+     a shared scale is the only reason these little charts are worth drawing. */
+  const domain = sparkDomain(rows.map(r => r.pts));
 
   for (const r of rows) {
     /* the sub-line carries whatever is known, in a fixed order, so rows stay
@@ -1009,7 +1061,7 @@ function renderLifts() {
         '<span class="lift-name">' + esc(r.ex.name) + '</span>' +
         (bits.length ? '<span class="lift-sub">' + bits.join(' · ') + '</span>' : '') +
       '</span>' +
-      (r.pts.length >= 2 ? sparkSvg(r.pts, 62, 24) : '<span class="lift-spark-gap"></span>') +
+      trendCell(r, domain) +
       '<span class="lift-val">' +
         '<span class="lift-now">' + (r.m ? esc(r.m.weight) : (r.w ? esc(r.w) : '—')) + '</span>' +
         goalHtml +
