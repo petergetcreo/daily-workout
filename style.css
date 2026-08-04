@@ -179,10 +179,15 @@ body.scrolled .streak-num { font-size: 19px; }
 .warmup-list .wu-dose { margin-left: auto; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 .warmup-list li.done { color: var(--muted); }
 .warmup-list li.done .wu-name { text-decoration: line-through; }
+/* Round, because it is a checkbox. A warm-up item is done or it is not, and
+   one tap flips it. The set buttons are rounded *squares* because they are
+   counters — tapping a logged one counts the reps down. They used to share a
+   shape while behaving nothing alike, which is the sort of thing you only
+   notice as "this app is slightly confusing" rather than as a bug. */
 .tick {
   width: 22px; height: 22px; flex-shrink: 0;
   border: 2px solid var(--line);
-  border-radius: 7px;
+  border-radius: 50%;
   display: grid; place-items: center;
   font-size: 13px; color: transparent;
 }
@@ -246,11 +251,12 @@ li.done .tick, .set.done { border-color: var(--good); background: var(--good); c
   white-space: nowrap;
 }
 .ex-line.is-done .l-name { color: var(--muted); text-decoration: line-through; }
+/* same reasoning as .tick — this is a status dot, not a control */
 .ex-line .l-tick {
   width: 20px; height: 20px;
   flex-shrink: 0;
   border: 2px solid var(--line);
-  border-radius: 6px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
   font-size: 12px;

@@ -127,11 +127,17 @@
       <span class="chapter-note" id="consistency-note"></span>
     </div>
 
-    <div class="stats-row">
+    <div class="stats-row" id="stats-row">
       <div class="stat"><span class="stat-num" id="stat-streak">0</span><span class="stat-label">streak</span></div>
       <div class="stat"><span class="stat-num" id="stat-total">0</span><span class="stat-label">total</span></div>
       <div class="stat"><span class="stat-num" id="stat-month">0</span><span class="stat-label">this month</span></div>
     </div>
+    <!-- Three zeros in 28px type say nothing, and we already decided a zero
+         streak is not worth the space when we hid the header pill. Once there
+         is any history the tiles come back — a 0 streak then is a real fact
+         about a broken run, which is different from having no runs at all. -->
+    <p class="hint" id="consistency-empty" hidden>Nothing logged yet. The
+      calendar below fills in as you train.</p>
 
     <div class="block">
       <div class="cal" id="cal"></div>

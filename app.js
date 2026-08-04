@@ -679,7 +679,9 @@ function renderBodyweight() {
   if (!entries.length) {
     $('bw-now').textContent = '—';
     $('bw-meta').textContent = 'No entries yet';
-    $('bw-delta').textContent = '';
+    /* the other two chapter headings always say something; a blank here made
+       Body look like it had failed to load rather than having nothing to say */
+    $('bw-delta').textContent = 'not tracking yet';
     drawSpark([]);
     return;
   }
@@ -1036,6 +1038,13 @@ function renderHistory() {
   $('consistency-note').textContent = first
     ? Math.max(1, Math.round((dayNumber(today()) - dayNumber(first)) / 7)) + ' weeks in'
     : 'just starting';
+
+  /* Nothing logged at all means all three tiles read 0, which is the same
+     empty gesture the header streak pill was hidden for. They return as soon
+     as there is any history to count. */
+  const nothingYet = done.length === 0;
+  $('stats-row').hidden = nothingYet;
+  $('consistency-empty').hidden = !nothingYet;
 
   /* 6-week calendar, weeks starting Sunday */
   const cal = $('cal');
