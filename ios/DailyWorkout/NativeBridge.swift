@@ -13,6 +13,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandler {
     private let impact = UIImpactFeedbackGenerator(style: .medium)
     private let lightImpact = UIImpactFeedbackGenerator(style: .light)
     private let notifier = RestNotifier()
+    private let reminders = Reminders()
 
     func userContentController(_ userContentController: WKUserContentController,
                                didReceive message: WKScriptMessage) {
@@ -35,6 +36,12 @@ final class NativeBridge: NSObject, WKScriptMessageHandler {
 
         case "cancelRestEnd":
             notifier.cancel()
+
+        case "setReminders":
+            // The whole schedule arrives every time and replaces what is
+            // pending. The web layer owns the decision of which days still
+            // need a nudge, because it is the side that knows what is logged.
+            reminders.replaceAll(with: body["items"] as? [[String: Any]] ?? [])
 
         case "ready":
             // One line at startup saying what the shell installed and whether

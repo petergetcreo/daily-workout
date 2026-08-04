@@ -796,7 +796,24 @@ button { font-family: inherit; cursor: pointer; }
 }
 .toggles label:last-child { border-bottom: 0; }
 .toggles .t-sub { display: block; font-size: 12px; color: var(--muted); font-weight: 400; }
-.toggles input { display: none; }
+/* scoped to checkboxes: the reminder rows carry a visible time field too */
+.toggles input[type="checkbox"] { display: none; }
+.t-time {
+  margin-left: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  padding: 7px 9px;
+  min-height: 36px;
+}
+.t-time:focus { outline: none; border-color: var(--accent); }
+/* a time you are not acting on should not shout — app.js disables the field
+   when its toggle is off, which is also the honest state for it to be in */
+.t-time:disabled { opacity: .4; }
 .switch {
   margin-left: auto;
   width: 46px; height: 28px;

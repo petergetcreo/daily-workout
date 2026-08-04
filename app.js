@@ -26,6 +26,11 @@ const DEFAULT_SETTINGS = {
   units: 'lb',
   equip: { bw: true, db: true, kb: true, bar: true, bench: true, cable: true, cardio: true },
   profile: { name: '', age: null, experience: 'regular' },
+  /* Native app only — see reconcileReminders. */
+  reminders: {
+    morning: { on: false, time: '07:30' },
+    evening: { on: false, time: '18:00' },
+  },
 };
 
 function load(key, fallback) {
@@ -53,6 +58,13 @@ function normalizeSettings(raw) {
   const s = Object.assign(structuredClone(DEFAULT_SETTINGS), obj(raw));
   s.equip   = Object.assign(structuredClone(DEFAULT_SETTINGS.equip), obj(s.equip));
   s.profile = Object.assign(structuredClone(DEFAULT_SETTINGS.profile), obj(s.profile));
+  /* two levels deep, so a backup written before reminders existed still gets
+     both slots rather than a half-built object that throws on first render */
+  const rem = obj(s.reminders);
+  s.reminders = {
+    morning: Object.assign(structuredClone(DEFAULT_SETTINGS.reminders.morning), obj(rem.morning)),
+    evening: Object.assign(structuredClone(DEFAULT_SETTINGS.reminders.evening), obj(rem.evening)),
+  };
   return s;
 }
 
@@ -1195,6 +1207,91 @@ function renderSettings() {
     b.classList.toggle('on', b.dataset.val === settings.units));
 
   buildEquipToggles($('equip-toggles'));
+  renderReminderSettings();
+}
+
+/* The whole block only exists inside the app. On the website there is no way
+   to schedule anything for tomorrow, so offering the switch would be a lie. */
+function renderReminderSettings() {
+  const native = !!(window.NativeShell && NativeShell.setReminders);
+  $('reminders-block').hidden = !native;
+  if (!native) return;
+
+  [['morning', 'rem-morning'], ['evening', 'rem-evening']].forEach(([slot, id]) => {
+    const cfg = settings.reminders[slot];
+    const on = $(id + '-on');
+    const time = $(id + '-time');
+    on.checked = !!cfg.on;
+    if (document.activeElement !== time) time.value = cfg.time;
+    time.disabled = !cfg.on;
+
+    on.onchange = () => {
+      cfg.on = on.checked;
+      time.disabled = !cfg.on;
+      persist();
+      reconcileReminders();
+    };
+    time.onchange = () => {
+      if (/^\d{2}:\d{2}$/.test(time.value)) {
+        cfg.time = time.value;
+        persist();
+        reconcileReminders();
+      } else {
+        time.value = cfg.time;   // an empty or half-typed field must not stick
+      }
+    };
+  });
+}
+
+/* Hands the whole reminder schedule to the shell, which replaces whatever it
+   had pending.
+
+   iOS cannot decide anything at the moment a notification fires, so "only
+   remind me if I have not trained" has to be resolved here, in advance: work
+   out which of the next few days still need a nudge and schedule exactly
+   those. Completing a workout drops that day's requests on the next reconcile.
+
+   A week of lead time means the reminders keep working even if the app is not
+   opened for days — which is precisely when a reminder earns its keep. */
+const REMINDER_DAYS = 7;
+
+function reconcileReminders() {
+  if (!(window.NativeShell && NativeShell.setReminders)) return;
+
+  const slots = [
+    ['morning', settings.reminders.morning, 'Today’s workout'],
+    ['evening', settings.reminders.evening, 'Still time today'],
+  ];
+  const now = new Date();
+  const items = [];
+
+  for (const [slot, cfg, title] of slots) {
+    if (!cfg.on) continue;
+    const [hh, mm] = String(cfg.time || '').split(':').map(Number);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) continue;
+
+    for (let i = 0; i < REMINDER_DAYS; i++) {
+      const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i, hh, mm, 0, 0);
+      if (at <= now) continue;                        // that moment has gone
+      const key = dateKey(at);
+      if (logs[key] && logs[key].complete) continue;  // already trained that day
+
+      /* buildPlan is pure and deterministic for a date, so the reminder can
+         name the session you are actually going to get. */
+      const p = Engine.buildPlan(key, settings, overrides[key], activeGoals());
+      const sets = p.main.reduce((a, m) => a + m.sets, 0);
+
+      items.push({
+        id: slot + '-' + key,
+        year: at.getFullYear(), month: at.getMonth() + 1, day: at.getDate(),
+        hour: hh, minute: mm,
+        title,
+        body: p.focus.label + ' — ' + sets + ' sets, about ' + p.minutes + ' min',
+      });
+    }
+  }
+
+  NativeShell.setReminders(items);
 }
 
 /* Equipment toggles render into the Settings page and into the first-open
@@ -1438,6 +1535,9 @@ $('finish-btn').onclick = () => {
   rec.ts = Date.now();
   persist();
   renderToday();
+  /* finishing withdraws today's nudges; un-finishing puts them back if their
+     time has not passed */
+  reconcileReminders();
   if (rec.complete && navigator.vibrate) navigator.vibrate(30);
 };
 
@@ -1843,6 +1943,10 @@ document.addEventListener('visibilitychange', () => {
 })();
 
 renderToday();
+
+/* Top the schedule back up on every open. The window is finite, so a run of
+   days without opening the app would otherwise walk off the end of it. */
+reconcileReminders();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});

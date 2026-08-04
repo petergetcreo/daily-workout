@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		1822867439F22F244C005141 /* RestNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = A84EB605711DD39A232FD0A4 /* RestNotifier.swift */; };
+		1B0DBC97573BC31A7220BF1F /* Reminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52399940B1B7E2E9CD0E4578 /* Reminders.swift */; };
 		1C92862B2AF0B56030A3D8AE /* WebViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6873FE3E80BE3712AFDE8E9 /* WebViewController.swift */; };
 		90337DBAE155A77A9E1D8ED7 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B138A621763F485A51BD7C80 /* AppDelegate.swift */; };
 		D6BE02542FDE49446C575BD3 /* NativeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E84DEE131D487E6FB761CAB6 /* NativeBridge.swift */; };
@@ -20,6 +21,7 @@
 		1F6CBEA5186805ABDF6C6C69 /* BundleSchemeHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundleSchemeHandler.swift; sourceTree = "<group>"; };
 		4581E5422501E3672BD25BD0 /* Bridge.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Bridge.js; sourceTree = "<group>"; };
 		4D2C6D84F4633E9F1BFEBD65 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		52399940B1B7E2E9CD0E4578 /* Reminders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Reminders.swift; sourceTree = "<group>"; };
 		A1BFBA84ABFFB7315960AA8C /* DailyWorkout.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = DailyWorkout.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A84EB605711DD39A232FD0A4 /* RestNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestNotifier.swift; sourceTree = "<group>"; };
 		B138A621763F485A51BD7C80 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -46,6 +48,7 @@
 				1F6CBEA5186805ABDF6C6C69 /* BundleSchemeHandler.swift */,
 				CA8B11FD6C6D4FBD3DD16BD6 /* Info.plist */,
 				E84DEE131D487E6FB761CAB6 /* NativeBridge.swift */,
+				52399940B1B7E2E9CD0E4578 /* Reminders.swift */,
 				A84EB605711DD39A232FD0A4 /* RestNotifier.swift */,
 				B6873FE3E80BE3712AFDE8E9 /* WebViewController.swift */,
 			);
@@ -154,6 +157,7 @@
 				90337DBAE155A77A9E1D8ED7 /* AppDelegate.swift in Sources */,
 				FA0E29ADD1EA229438F35A2B /* BundleSchemeHandler.swift in Sources */,
 				D6BE02542FDE49446C575BD3 /* NativeBridge.swift in Sources */,
+				1B0DBC97573BC31A7220BF1F /* Reminders.swift in Sources */,
 				1822867439F22F244C005141 /* RestNotifier.swift in Sources */,
 				1C92862B2AF0B56030A3D8AE /* WebViewController.swift in Sources */,
 			);

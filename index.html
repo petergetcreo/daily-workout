@@ -208,6 +208,29 @@
       <div class="toggles" id="equip-toggles"></div>
     </div>
 
+    <!-- Shown only inside the iOS app. A web page cannot schedule anything for
+         tomorrow, so on the website this stays hidden rather than offering a
+         switch that would never fire. app.js unhides it. -->
+    <div class="block" id="reminders-block" hidden>
+      <div class="block-head"><h2>Reminders</h2></div>
+      <p class="hint">Scheduled on this phone by iOS. Nothing is sent anywhere,
+        and the evening one is skipped on any day you have already trained.</p>
+      <div class="toggles">
+        <label>
+          <span><strong style="font-weight:600">Morning</strong>
+            <span class="t-sub">A nudge to get it done</span></span>
+          <input type="time" id="rem-morning-time" class="t-time" aria-label="Morning reminder time">
+          <input type="checkbox" id="rem-morning-on"><span class="switch"></span>
+        </label>
+        <label>
+          <span><strong style="font-weight:600">Evening</strong>
+            <span class="t-sub">Only if you have not trained</span></span>
+          <input type="time" id="rem-evening-time" class="t-time" aria-label="Evening reminder time">
+          <input type="checkbox" id="rem-evening-on"><span class="switch"></span>
+        </label>
+      </div>
+    </div>
+
     <div class="block">
       <div class="block-head"><h2>Units</h2></div>
       <p class="hint">Switching offers to convert the numbers you already logged, or just relabel them.</p>

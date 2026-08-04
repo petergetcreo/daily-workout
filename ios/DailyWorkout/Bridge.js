@@ -19,8 +19,20 @@
   /* app.js feature-detects this object and calls through it. In a browser it
      simply does not exist, and every call site is guarded. */
   window.NativeShell = {
-    version: 2,
+    version: 3,
     post: post,
+
+    /* Daily training reminders. app.js checks for this function's existence to
+       decide whether to offer the setting at all — on the website there is no
+       way to schedule anything for tomorrow, so the option is hidden rather
+       than shown and quietly broken.
+
+       `items` is the complete schedule, and replaces whatever is pending. The
+       web layer decides which days still need a nudge because it is the side
+       that knows which days are already logged. */
+    setReminders: function (items) {
+      post({ action: 'setReminders', items: items || [] });
+    },
 
     /* A rest that runs out while the app is backgrounded cannot announce
        itself from JavaScript — the interval stops firing once iOS suspends
