@@ -1225,16 +1225,20 @@ function renderReminderSettings() {
     if (document.activeElement !== time) time.value = cfg.time;
     time.disabled = !cfg.on;
 
+    /* save(KEY.settings) rather than persist() — persist() writes the logs and
+       the lift records and pointedly not the settings, which live under their
+       own key. Calling the wrong one here looked like it worked and then lost
+       the choice on next launch. */
     on.onchange = () => {
       cfg.on = on.checked;
       time.disabled = !cfg.on;
-      persist();
+      save(KEY.settings, settings);
       reconcileReminders();
     };
     time.onchange = () => {
       if (/^\d{2}:\d{2}$/.test(time.value)) {
         cfg.time = time.value;
-        persist();
+        save(KEY.settings, settings);
         reconcileReminders();
       } else {
         time.value = cfg.time;   // an empty or half-typed field must not stick

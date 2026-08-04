@@ -215,14 +215,17 @@
       <div class="block-head"><h2>Reminders</h2></div>
       <p class="hint">Scheduled on this phone by iOS. Nothing is sent anywhere,
         and the evening one is skipped on any day you have already trained.</p>
+      <!-- `for` is load-bearing here. These rows hold two controls, and a label
+           without it binds to the FIRST labelable descendant — the time field —
+           so tapping the switch only focused the clock and toggled nothing. -->
       <div class="toggles">
-        <label>
+        <label for="rem-morning-on">
           <span><strong style="font-weight:600">Morning</strong>
             <span class="t-sub">A nudge to get it done</span></span>
           <input type="time" id="rem-morning-time" class="t-time" aria-label="Morning reminder time">
           <input type="checkbox" id="rem-morning-on"><span class="switch"></span>
         </label>
-        <label>
+        <label for="rem-evening-on">
           <span><strong style="font-weight:600">Evening</strong>
             <span class="t-sub">Only if you have not trained</span></span>
           <input type="time" id="rem-evening-time" class="t-time" aria-label="Evening reminder time">
