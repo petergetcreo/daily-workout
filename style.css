@@ -573,10 +573,14 @@ button { font-family: inherit; cursor: pointer; }
 }
 /* sparkSvg emits class="spark lift-spark", so this MUST stay below the .spark
    rule above — same specificity, and .spark sets a full-width 62px-tall chart
-   that would otherwise win and blow the row open. */
+   that would otherwise win and blow the row open.
+
+   40 tall rather than 24: the shared domain is only worth drawing if two lifts
+   that moved differently look different, and 18px of usable range could not do
+   it. Keep this in step with the H passed in trendCell. */
 .lift-spark {
   width: 62px;
-  height: 24px;
+  height: 40px;
   flex: none;
   margin: 0;
   overflow: visible;
@@ -689,8 +693,19 @@ button { font-family: inherit; cursor: pointer; }
 }
 /* A finished workout is the same idea as a finished set, so it is the same
    green. It used to be orange, which made "done" mean two different colours
-   depending on which screen you were looking at. */
-.cal-cell.done { background: var(--good); color: #08110c; font-weight: 700; }
+   depending on which screen you were looking at.
+
+   The green is carried by the numeral on a tinted tile rather than by a solid
+   fill. Six weeks of training is 40 of 42 cells, and at full saturation that
+   stopped being a calendar and became one green rectangle — the shape of the
+   month, which is the only thing a grid is for, was the first casualty. The
+   numeral is 5.55:1 on the tile and the tile is 1.57:1 on the card, so a
+   trained day is still obvious at a glance. */
+.cal-cell.done {
+  background: rgba(53, 208, 127, .22);
+  color: var(--good);
+  font-weight: 700;
+}
 .cal-cell.today { box-shadow: inset 0 0 0 2px var(--text); }
 .cal-cell.future { opacity: .3; }
 .cal-cell.has-log { cursor: pointer; }
@@ -819,7 +834,17 @@ button { font-family: inherit; cursor: pointer; }
   align-items: center;
 }
 .seg button small { font-size: 11px; font-weight: 400; opacity: .8; }
-.seg button.on { background: var(--accent); border-color: var(--accent); color: #170c04; }
+/* Selected is also state. A tint plus the accent border plus an accent label
+   separates it from its neighbours without a solid block: the label is 5.47:1
+   on the fill, against 5.65:1 for the muted label on an unselected one, so the
+   two read as equally legible and differently coloured — which is the job. */
+.seg button.on {
+  background: rgba(255, 122, 47, .14);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* the sub-line stays fully opaque here: at .8 over the tint it slid under 4.5 */
+.seg button.on small { opacity: 1; }
 
 .toggles { background: var(--surface); border-radius: var(--radius); overflow: hidden; }
 .toggles label {
@@ -869,8 +894,14 @@ button { font-family: inherit; cursor: pointer; }
   background: var(--muted);
   transition: transform .16s, background .16s;
 }
-input:checked + .switch { background: var(--accent); border-color: var(--accent); }
-input:checked + .switch::after { transform: translateX(18px); background: #170c04; }
+/* On is state, not an action and not live data, so it does not get to wear the
+   accent at full strength — seven pieces of kit switched on used to put seven
+   saturated 46px slabs on the screen and pull the eye straight to the least
+   interesting thing on it, the defaults. The hue still says which app this is;
+   it is just the 20px knob carrying it now instead of the whole track. Knob is
+   4.32:1 on the track, and the position shift does the rest. */
+input:checked + .switch { background: rgba(255, 122, 47, .26); border-color: var(--accent-dim); }
+input:checked + .switch::after { transform: translateX(18px); background: var(--accent); }
 
 /* ---------- tab bar ---------- */
 .tabbar {

@@ -947,23 +947,42 @@ function liftSeries(exId) {
    exactly the same triumphant climb as one that added sixty. Every line looked
    like excellent progress, which made the picture worse than no picture.
 
-   The domain is the largest deviation any plotted lift reaches, so nothing is
-   ever clipped, with a floor of ±MIN_SPAN% so that a set of near-flat lifts
-   does not get magnified back into drama. One domain for all rows is the point
-   — it is what makes two sparklines on this page mean the same thing. */
-const SPARK_MIN_SPAN = 5;
+   The domain spans the actual deviations the plotted lifts reach — always
+   stretched to include 0 so the baseline stays on screen — with a floor of
+   MIN_SPAN percentage points so that a set of near-flat lifts does not get
+   magnified back into drama. One domain for all rows is the point: it is what
+   makes two sparklines on this page mean the same thing.
+
+   It is deliberately NOT symmetric around zero. When every lift is climbing,
+   ±max hands half the box to negative territory nobody occupies, and the
+   survivors get crushed into the remaining half — +12 lb and +19 lb landed
+   1.2px apart in a 24px box, which is no comparison at all. Fitting the real
+   range keeps one shared scale and spends the whole box on it. */
+const SPARK_MIN_SPAN = 10;   // percentage points, total
 
 function sparkDomain(seriesList) {
-  let worst = 0;
+  /* seeded at 0,0: the baseline a line is read against has to stay in frame
+     even when every lift sits well above or below it */
+  let lo = 0, hi = 0;
   for (const pts of seriesList) {
     if (!pts || pts.length < 2) continue;
     const base = pts[0][1];
     if (!base) continue;
     for (const [, v] of pts) {
-      worst = Math.max(worst, Math.abs((v - base) / base) * 100);
+      const pct = ((v - base) / base) * 100;
+      if (pct < lo) lo = pct;
+      if (pct > hi) hi = pct;
     }
   }
-  return Math.max(SPARK_MIN_SPAN, Math.ceil(worst));
+  lo = Math.floor(lo);
+  hi = Math.ceil(hi);
+  const short = SPARK_MIN_SPAN - (hi - lo);
+  if (short > 0) {
+    const half = Math.ceil(short / 2);
+    lo -= half;
+    hi += half;
+  }
+  return { lo, hi };
 }
 
 function sparkSvg(pts, W, H, domain) {
@@ -971,11 +990,15 @@ function sparkSvg(pts, W, H, domain) {
   const xs = pts.map(([k]) => dayNumber(k));
   const x0 = Math.min(...xs), spanX = (Math.max(...xs) - x0) || 1;
   const base = pts[0][1] || 1;
-  const mid = H / 2;
-  const scale = (H - PAD * 2) / (domain * 2);
+  const spanY = (domain.hi - domain.lo) || 1;
 
   const px = k => PAD + ((dayNumber(k) - x0) / spanX) * (W - PAD * 2);
-  const py = v => mid - Math.max(-domain, Math.min(domain, ((v - base) / base) * 100)) * scale;
+  const py = v => {
+    const pct = Math.max(domain.lo, Math.min(domain.hi, ((v - base) / base) * 100));
+    return PAD + ((domain.hi - pct) / spanY) * (H - PAD * 2);
+  };
+  /* wherever 0% happens to land in a fitted domain — no longer the midline */
+  const zeroY = PAD + (domain.hi / spanY) * (H - PAD * 2);
 
   const line = pts.map(([k, v], i) =>
     (i ? 'L' : 'M') + px(k).toFixed(1) + ' ' + py(v).toFixed(1)).join(' ');
@@ -983,7 +1006,7 @@ function sparkSvg(pts, W, H, domain) {
 
   return '<svg class="spark lift-spark" viewBox="0 0 ' + W + ' ' + H + '" aria-hidden="true">' +
     /* the line you read against: where this lift started */
-    '<path class="sp-zero" d="M' + PAD + ' ' + mid + ' L' + (W - PAD) + ' ' + mid + '"/>' +
+    '<path class="sp-zero" d="M' + PAD + ' ' + zeroY.toFixed(1) + ' L' + (W - PAD) + ' ' + zeroY.toFixed(1) + '"/>' +
     '<path class="sp-line" d="' + line + '"/>' +
     '<circle class="sp-dot" cx="' + px(last[0]).toFixed(1) + '" cy="' + py(last[1]).toFixed(1) + '" r="2.2"/>' +
     '</svg>';
@@ -1004,7 +1027,7 @@ function trendCell(r, domain) {
   const diff = Math.round(r.pts[r.pts.length - 1][1] - r.pts[0][1]);
   const flat = Math.abs(diff) < 3;
   return '<span class="lift-trend">' +
-    sparkSvg(r.pts, 62, 24, domain) +
+    sparkSvg(r.pts, 62, 40, domain) +
     '<span class="lift-delta' + (flat ? ' flat' : '') + '">' +
       (diff > 0 ? '+' : diff < 0 ? '−' : '±') + Math.abs(diff) + ' ' + settings.units +
     '</span>' +
