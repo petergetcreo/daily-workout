@@ -222,6 +222,8 @@ li.done .tick, .set.done { border-color: var(--good); background: var(--good); c
   color: var(--accent);
   margin-bottom: 6px;
 }
+/* green means done, here as everywhere else */
+.now-label.is-done { color: var(--good); }
 
 /* a run of collapsed rows */
 .stack {

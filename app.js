@@ -287,10 +287,20 @@ function logSet(item, s, doneSets, range, rec, key) {
 
   const nowDone = rec.sets[item.ex.id] || 0;
 
-  /* Finishing the exercise you are on hands the card to the next one. Doing
-     it here rather than in the render is what keeps a finished row reopenable
-     — the render must not undo a focus you just asked for. */
-  if (focusedExId === item.ex.id && nowDone >= item.sets) focusedExId = null;
+  /* Finishing an exercise PINS the card to it. You move on by tapping the next
+     row, the same gesture the rest of the list already uses.
+
+     This used to hand the card straight to the next exercise, which broke the
+     one correction that matters most. Tapping a logged set counts it down a rep
+     — but the last set of the last three was the tap that also finished the
+     exercise, so by the time your thumb came back down the card had already
+     become the next movement and its pips had slid under it. The tap meant to
+     say "I only got 7" logged sets on something you had not done yet.
+
+     Pinning also has to happen here rather than in the render: the render must
+     not undo a focus you just asked for, which is what keeps a finished row
+     reopenable when you tap it. */
+  if (nowDone >= item.sets) focusedExId = item.ex.id;
 
   persist();
   checkGoals();
@@ -422,10 +432,14 @@ function renderToday() {
     stack = null;   // the active card breaks the run of rows
 
     const card = document.createElement('div');
-    card.className = 'ex is-active' + (doneSets >= item.sets ? ' complete' : '');
+    const cardDone = doneSets >= item.sets;
+    card.className = 'ex is-active' + (cardDone ? ' complete' : '');
+    /* A finished card keeps the slot but not the word: it is no longer the thing
+       you are on, and the finisher below it says "Now" the moment the main work
+       is logged. Two "Now" labels on one screen point in two directions. */
     const nowLabel = document.createElement('span');
-    nowLabel.className = 'now-label';
-    nowLabel.textContent = 'Now';
+    nowLabel.className = 'now-label' + (cardDone ? ' is-done' : '');
+    nowLabel.textContent = cardDone ? 'Done' : 'Now';
     card.appendChild(nowLabel);
 
     const dose = doseOf(item);
